@@ -3,6 +3,7 @@ const COMMANDS = {
   ADD_FRIEND: "新增朋友",
   DELETE_FRIEND: "刪除朋友",
   TODAY_REPORT: "今日報表",
+  FRIEND_REPORT: "朋友報表",
   HELP: "說明",
   UNAVAILABLE: "備用功能無法使用",
 };
@@ -10,6 +11,8 @@ const COMMANDS = {
 const INTERNAL_COMMANDS = {
   SELECT_FRIEND_PREFIX: "#",
   DELETE_FRIEND_PREFIX: "!刪除朋友:",
+  CONFIRM_DELETE_FRIEND_PREFIX: "!確認刪除朋友:",
+  CANCEL_DELETE_FRIEND: "!取消刪除朋友",
   TODAY_REPORT_PREFIX: "!今日報表:",
 };
 
@@ -99,6 +102,25 @@ async function handleTextMessage(event, env, userId) {
 }
 
 async function handleInternalTextCommand(event, env, userId, text, session) {
+  if (text.startsWith(INTERNAL_COMMANDS.CONFIRM_DELETE_FRIEND_PREFIX)) {
+    const friendName = text
+      .slice(INTERNAL_COMMANDS.CONFIRM_DELETE_FRIEND_PREFIX.length)
+      .trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleConfirmDeleteFriend(event, env, friendName);
+    return true;
+  }
+
+  if (text === INTERNAL_COMMANDS.CANCEL_DELETE_FRIEND) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await replyMessage(
+      event.replyToken,
+      "已取消刪除朋友。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return true;
+  }
+
   if (text.startsWith(INTERNAL_COMMANDS.DELETE_FRIEND_PREFIX)) {
     const friendName = text
       .slice(INTERNAL_COMMANDS.DELETE_FRIEND_PREFIX.length)
@@ -141,7 +163,7 @@ async function handleRichMenuCommand(event, env, userId, text, session) {
     return true;
   }
 
-  if (text === COMMANDS.TODAY_REPORT) {
+  if (text === COMMANDS.TODAY_REPORT || text === COMMANDS.FRIEND_REPORT) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
     await handleTodayReportCommand(event, env);
     return true;
@@ -352,6 +374,33 @@ async function handlePendingAddFriend(event, env, userId, text) {
 }
 
 async function handleDeleteFriend(event, env, friendName) {
+  if (!friendName) {
+    await replyMessage(
+      event.replyToken,
+      "請先選擇要刪除的朋友。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const friend = await getFriendByName(env.DB, friendName);
+  if (!friend) {
+    await replyMessage(
+      event.replyToken,
+      `找不到朋友：${friendName}。`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await replyDeleteFriendConfirmation(
+    event.replyToken,
+    friend,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleConfirmDeleteFriend(event, env, friendName) {
   if (!friendName) {
     await replyMessage(
       event.replyToken,
@@ -800,40 +849,41 @@ function parseJsonOrDefault(value, defaultValue) {
 
 function buildCalculationReport(friendName, entries, imageCount = 0) {
   const totals = { 2: 0, 3: 0, 4: 0 };
-  const lines = [`${friendName} 今日報表`, ""];
+  const lines = [`${friendName} ${getTaipeiDateString()} 報表`, ""];
 
   if (entries.length === 0) {
     lines.push("今天沒有可計算的文字資料。");
   }
 
   for (const [index, entry] of entries.entries()) {
-    lines.push(`${index + 1}. ${entry.sourceLineText}`);
-
     if (entry.errorMessage) {
+      lines.push(`${index + 1}. ${entry.sourceLineText}`);
       lines.push(`   無法解析：${entry.errorMessage}`);
       continue;
     }
-
-    lines.push(`   排數：${entry.rows.length}`);
 
     const calculationTexts = entry.calculations.map((calculation) => {
       if (totals[calculation.pick] !== undefined) {
         totals[calculation.pick] += calculation.amount;
       }
 
-      return `${formatPickLabel(calculation.pick)}=${formatNumber(
+      return `${formatPickLabel(calculation.pick)}${formatNumber(
         calculation.amount
       )}`;
     });
 
-    lines.push(`   ${calculationTexts.join("，")}`);
+    lines.push(
+      `${index + 1}. ${entry.sourceLineText}：${calculationTexts.join("、")}`
+    );
   }
 
   lines.push("");
   lines.push("加總");
-  lines.push(`二：${formatNumber(totals[2])}`);
-  lines.push(`三：${formatNumber(totals[3])}`);
-  lines.push(`四：${formatNumber(totals[4])}`);
+  lines.push(
+    [`二${formatNumber(totals[2])}`, `三${formatNumber(totals[3])}`, `四${formatNumber(totals[4])}`].join(
+      "、"
+    )
+  );
 
   if (imageCount > 0) {
     lines.push("");
@@ -1038,6 +1088,23 @@ function formatNumber(value) {
   return Number(value.toFixed(4)).toString();
 }
 
+function getTaipeiDateString(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function isAllowedUser(userId, allowedUserIds) {
   if (!userId || !allowedUserIds) return false;
 
@@ -1192,6 +1259,84 @@ async function replyDeleteFriendPicker(replyToken, friends, channelAccessToken) 
                   layout: "vertical",
                   spacing: "sm",
                   contents: buttons,
+                },
+              ],
+            },
+          },
+        },
+      ],
+    }),
+  });
+}
+
+async function replyDeleteFriendConfirmation(
+  replyToken,
+  friend,
+  channelAccessToken
+) {
+  await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${channelAccessToken}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [
+        {
+          type: "flex",
+          altText: `確認刪除朋友：${friend.name}`,
+          contents: {
+            type: "bubble",
+            body: {
+              type: "box",
+              layout: "vertical",
+              spacing: "md",
+              contents: [
+                {
+                  type: "text",
+                  text: "確認刪除朋友",
+                  weight: "bold",
+                  size: "lg",
+                },
+                {
+                  type: "text",
+                  text: `確定要刪除 ${friend.name} 嗎？`,
+                  size: "md",
+                  wrap: true,
+                },
+                {
+                  type: "text",
+                  text: "刪除後會從名單隱藏，已記錄注單與報表資料不會刪除。",
+                  size: "sm",
+                  color: "#666666",
+                  wrap: true,
+                },
+              ],
+            },
+            footer: {
+              type: "box",
+              layout: "vertical",
+              spacing: "sm",
+              contents: [
+                {
+                  type: "button",
+                  style: "primary",
+                  color: "#D93025",
+                  action: {
+                    type: "message",
+                    label: "確認刪除",
+                    text: `${INTERNAL_COMMANDS.CONFIRM_DELETE_FRIEND_PREFIX}${friend.name}`,
+                  },
+                },
+                {
+                  type: "button",
+                  style: "secondary",
+                  action: {
+                    type: "message",
+                    label: "取消",
+                    text: INTERNAL_COMMANDS.CANCEL_DELETE_FRIEND,
+                  },
                 },
               ],
             },
