@@ -152,6 +152,7 @@ export default {
 
 async function handleTextMessage(event, env, userId) {
   const text = event.message.text.trim();
+  const deleteFriendPrefix = "!刪除朋友:";
 
   if (text === "新增朋友") {
     await setPendingAction(env.DB, userId, "add_friend");
@@ -166,8 +167,12 @@ async function handleTextMessage(event, env, userId) {
 
   const session = await getCurrentSession(env.DB, userId);
 
-  if (session?.pending_action === "add_friend") {
-    await handlePendingAddFriend(event, env, userId, text);
+  if (text.startsWith(deleteFriendPrefix)) {
+    const friendName = text.slice(deleteFriendPrefix.length).trim();
+    if (session?.pending_action) {
+      await clearPendingAction(env.DB, userId);
+    }
+    await handleDeleteFriend(event, env, friendName);
     return;
   }
 
@@ -195,6 +200,10 @@ async function handleTextMessage(event, env, userId) {
   }
 
   if (text === "選朋友") {
+    if (session?.pending_action) {
+      await clearPendingAction(env.DB, userId);
+    }
+
     const friends = await getFriends(env.DB);
     await replyFriendPicker(
       event.replyToken,
@@ -204,16 +213,25 @@ async function handleTextMessage(event, env, userId) {
     return;
   }
 
-  if (text === "今日整理") {
-    await replyMessage(
+  if (text === "刪除朋友") {
+    if (session?.pending_action) {
+      await clearPendingAction(env.DB, userId);
+    }
+
+    const friends = await getFriends(env.DB);
+    await replyDeleteFriendPicker(
       event.replyToken,
-      "今日整理功能下一步會整理目前來源今天的資料。",
+      friends,
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
   }
 
-  if (text === "朋友報表") {
+  if (text === "今日報表") {
+    if (session?.pending_action) {
+      await clearPendingAction(env.DB, userId);
+    }
+
     const session = await getCurrentSession(env.DB, userId);
 
     if (!session?.friend_id) {
@@ -225,18 +243,18 @@ async function handleTextMessage(event, env, userId) {
       return;
     }
 
-    const messages = await getRecentMessagesByFriend(env.DB, session.friend_id);
+    const messages = await getTodayMessagesByFriend(env.DB, session.friend_id);
 
     if (messages.length === 0) {
       await replyMessage(
         event.replyToken,
-        `${session.friend_name} 目前還沒有資料。`,
+        `${session.friend_name} 今天還沒有資料。`,
         env.LINE_CHANNEL_ACCESS_TOKEN
       );
       return;
     }
 
-    const report = buildSimpleReport(session.friend_name, messages);
+    const report = buildSimpleReport(session.friend_name, messages, "今日報表");
 
     await replyMessage(
       event.replyToken,
@@ -246,18 +264,24 @@ async function handleTextMessage(event, env, userId) {
     return;
   }
 
-  if (text === "清除來源") {
-    await clearCurrentFriend(env.DB, userId);
+  if (text === "備用功能無法使用") {
+    if (session?.pending_action) {
+      await clearPendingAction(env.DB, userId);
+    }
 
     await replyMessage(
       event.replyToken,
-      "目前來源已清除。",
+      "備用功能目前無法使用。",
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
   }
 
   if (text === "說明") {
+    if (session?.pending_action) {
+      await clearPendingAction(env.DB, userId);
+    }
+
     await replyMessage(
       event.replyToken,
       [
@@ -265,14 +289,22 @@ async function handleTextMessage(event, env, userId) {
         "1. 點下方選單的「選朋友」",
         "2. 設定目前來源",
         "3. 傳入這個來源的文字或圖片",
-        "4. 點「朋友報表」產生目前來源的內容",
+        "4. 點「今日報表」產生目前來源今天的內容",
         "",
         "新增朋友：",
         "點「新增朋友」後，下一則文字會被新增為朋友名稱。",
         "新增朋友不會改變目前來源。",
+        "",
+        "刪除朋友：",
+        "點「刪除朋友」後，選擇要刪除的朋友。",
       ].join("\n"),
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
+    return;
+  }
+
+  if (session?.pending_action === "add_friend") {
+    await handlePendingAddFriend(event, env, userId, text);
     return;
   }
 
@@ -334,6 +366,35 @@ async function handlePendingAddFriend(event, env, userId, text) {
   );
 }
 
+async function handleDeleteFriend(event, env, friendName) {
+  if (!friendName) {
+    await replyMessage(
+      event.replyToken,
+      "請先選擇要刪除的朋友。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const friend = await getFriendByName(env.DB, friendName);
+  if (!friend) {
+    await replyMessage(
+      event.replyToken,
+      `找不到朋友：${friendName}。`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await deleteFriend(env.DB, friend.id);
+
+  await replyMessage(
+    event.replyToken,
+    `已刪除朋友：${friend.name}`,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
 async function handleImageMessage(event, env, userId) {
   const session = await getCurrentSession(env.DB, userId);
 
@@ -377,11 +438,14 @@ async function ensureDatabaseSchema(db) {
       CREATE TABLE IF NOT EXISTS friends (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
+        deleted_at TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
       `
     )
     .run();
+
+  await ensureColumn(db, "friends", "deleted_at", "TEXT");
 
   await db
     .prepare(
@@ -433,7 +497,14 @@ async function ensureColumn(db, tableName, columnName, columnDefinition) {
 
 async function getFriends(db) {
   const result = await db
-    .prepare("SELECT id, name FROM friends ORDER BY id ASC")
+    .prepare(
+      `
+      SELECT id, name
+      FROM friends
+      WHERE deleted_at IS NULL
+      ORDER BY id ASC
+      `
+    )
     .all();
 
   return result.results || [];
@@ -441,18 +512,81 @@ async function getFriends(db) {
 
 async function getFriendByName(db, name) {
   return await db
-    .prepare("SELECT id, name FROM friends WHERE name = ?")
+    .prepare(
+      `
+      SELECT id, name
+      FROM friends
+      WHERE name = ?
+        AND deleted_at IS NULL
+      `
+    )
     .bind(name)
     .first();
 }
 
 async function createFriend(db, name) {
+  const deletedFriend = await getDeletedFriendByName(db, name);
+  if (deletedFriend) {
+    await db
+      .prepare(
+        `
+        UPDATE friends
+        SET deleted_at = NULL
+        WHERE id = ?
+        `
+      )
+      .bind(deletedFriend.id)
+      .run();
+
+    return await getFriendByName(db, name);
+  }
+
   await db
     .prepare("INSERT OR IGNORE INTO friends (name) VALUES (?)")
     .bind(name)
     .run();
 
   return await getFriendByName(db, name);
+}
+
+async function getDeletedFriendByName(db, name) {
+  return await db
+    .prepare(
+      `
+      SELECT id, name
+      FROM friends
+      WHERE name = ?
+        AND deleted_at IS NOT NULL
+      `
+    )
+    .bind(name)
+    .first();
+}
+
+async function deleteFriend(db, friendId) {
+  await db
+    .prepare(
+      `
+      UPDATE user_sessions
+      SET current_friend_id = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE current_friend_id = ?
+      `
+    )
+    .bind(friendId)
+    .run();
+
+  await db
+    .prepare(
+      `
+      UPDATE friends
+      SET deleted_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND deleted_at IS NULL
+      `
+    )
+    .bind(friendId)
+    .run();
 }
 
 async function setCurrentFriend(db, lineUserId, friendId) {
@@ -474,28 +608,6 @@ async function setCurrentFriend(db, lineUserId, friendId) {
       `
     )
     .bind(lineUserId, friendId)
-    .run();
-}
-
-async function clearCurrentFriend(db, lineUserId) {
-  await db
-    .prepare(
-      `
-      INSERT INTO user_sessions (
-        line_user_id,
-        current_friend_id,
-        pending_action,
-        updated_at
-      )
-      VALUES (?, NULL, NULL, CURRENT_TIMESTAMP)
-      ON CONFLICT(line_user_id)
-      DO UPDATE SET
-        current_friend_id = NULL,
-        pending_action = NULL,
-        updated_at = CURRENT_TIMESTAMP
-      `
-    )
-    .bind(lineUserId)
     .run();
 }
 
@@ -534,11 +646,13 @@ async function getCurrentSession(db, lineUserId) {
     .prepare(
       `
       SELECT
-        user_sessions.current_friend_id AS friend_id,
+        friends.id AS friend_id,
         user_sessions.pending_action AS pending_action,
         friends.name AS friend_name
       FROM user_sessions
-      LEFT JOIN friends ON friends.id = user_sessions.current_friend_id
+      LEFT JOIN friends
+        ON friends.id = user_sessions.current_friend_id
+       AND friends.deleted_at IS NULL
       WHERE user_sessions.line_user_id = ?
       `
     )
@@ -570,15 +684,16 @@ async function saveRawMessage(db, message) {
     .run();
 }
 
-async function getRecentMessagesByFriend(db, friendId) {
+async function getTodayMessagesByFriend(db, friendId) {
   const result = await db
     .prepare(
       `
       SELECT id, message_type, raw_text, image_message_id, created_at
       FROM raw_messages
       WHERE friend_id = ?
-      ORDER BY created_at DESC
-      LIMIT 20
+        AND date(created_at, '+8 hours') = date('now', '+8 hours')
+      ORDER BY created_at ASC
+      LIMIT 50
       `
     )
     .bind(friendId)
@@ -587,8 +702,8 @@ async function getRecentMessagesByFriend(db, friendId) {
   return result.results || [];
 }
 
-function buildSimpleReport(friendName, messages) {
-  const lines = [`${friendName} 資料整理`, ""];
+function buildSimpleReport(friendName, messages, reportTitle = "資料整理") {
+  const lines = [`${friendName} ${reportTitle}`, ""];
 
   for (const [index, message] of messages.entries()) {
     if (message.message_type === "text") {
@@ -680,6 +795,74 @@ async function replyFriendPicker(replyToken, friends, channelAccessToken) {
                 {
                   type: "text",
                   text: "選好後，接下來傳入的資料會記錄到目前來源。",
+                  size: "sm",
+                  color: "#666666",
+                  wrap: true,
+                },
+                {
+                  type: "box",
+                  layout: "vertical",
+                  spacing: "sm",
+                  contents: buttons,
+                },
+              ],
+            },
+          },
+        },
+      ],
+    }),
+  });
+}
+
+async function replyDeleteFriendPicker(replyToken, friends, channelAccessToken) {
+  if (friends.length === 0) {
+    await replyMessage(
+      replyToken,
+      "目前沒有朋友名單可刪除。",
+      channelAccessToken
+    );
+    return;
+  }
+
+  const buttons = friends.slice(0, 12).map((friend) => ({
+    type: "button",
+    style: "primary",
+    color: "#D93025",
+    action: {
+      type: "message",
+      label: friend.name,
+      text: `!刪除朋友:${friend.name}`,
+    },
+  }));
+
+  await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${channelAccessToken}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [
+        {
+          type: "flex",
+          altText: "請選擇要刪除的朋友",
+          contents: {
+            type: "bubble",
+            body: {
+              type: "box",
+              layout: "vertical",
+              spacing: "md",
+              contents: [
+                {
+                  type: "text",
+                  text: "請選擇要刪除的朋友",
+                  weight: "bold",
+                  size: "lg",
+                },
+                {
+                  type: "text",
+                  text: "刪除後會從名單隱藏，已記錄資料不會刪除。",
                   size: "sm",
                   color: "#666666",
                   wrap: true,
