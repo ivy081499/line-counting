@@ -1,11 +1,13 @@
 const COMMANDS = {
-  SELECT_FRIEND: "選朋友",
+  SELECT_FRIEND_FOR_BET: "選朋友下單",
   ADD_FRIEND: "新增朋友",
   DELETE_FRIEND: "刪除朋友",
-  TODAY_REPORT: "今日報表",
-  FRIEND_REPORT: "朋友報表",
+  FRIEND_LIST: "查看朋友列表",
+  TODAY_ORDERS: "今日注單",
+  PAST_ORDERS: "過往注單",
+  FRIEND_MANAGEMENT: "朋友管理",
+  COST_MANAGEMENT: "成本管理",
   HELP: "說明",
-  UNAVAILABLE: "備用功能無法使用",
 };
 
 const INTERNAL_COMMANDS = {
@@ -13,11 +15,16 @@ const INTERNAL_COMMANDS = {
   DELETE_FRIEND_PREFIX: "!刪除朋友:",
   CONFIRM_DELETE_FRIEND_PREFIX: "!確認刪除朋友:",
   CANCEL_DELETE_FRIEND: "!取消刪除朋友",
-  TODAY_REPORT_PREFIX: "!今日報表:",
+  ORDER_REPORT_PREFIX: "!注單報表:",
+  PAST_ORDER_DATE_PREFIX: "!過往注單日期:",
+  COST_MANAGEMENT_PREFIX: "!成本管理:",
+  VIEW_COST_PREFIX: "!查看成本:",
+  EDIT_COST_PREFIX: "!編輯成本:",
 };
 
 const PENDING_ACTIONS = {
   ADD_FRIEND: "add_friend",
+  PAST_ORDER_DATE: "past_order_date",
 };
 
 export default {
@@ -98,6 +105,11 @@ async function handleTextMessage(event, env, userId) {
     return;
   }
 
+  if (session?.pending_action === PENDING_ACTIONS.PAST_ORDER_DATE) {
+    await handlePendingPastOrderDate(event, env, userId, text);
+    return;
+  }
+
   await handleSaveTextMessage(event, env, userId, text, session);
 }
 
@@ -130,12 +142,43 @@ async function handleInternalTextCommand(event, env, userId, text, session) {
     return true;
   }
 
-  if (text.startsWith(INTERNAL_COMMANDS.TODAY_REPORT_PREFIX)) {
-    const friendName = text
-      .slice(INTERNAL_COMMANDS.TODAY_REPORT_PREFIX.length)
+  if (text.startsWith(INTERNAL_COMMANDS.ORDER_REPORT_PREFIX)) {
+    const payload = text.slice(INTERNAL_COMMANDS.ORDER_REPORT_PREFIX.length);
+    const { dateText, friendName } = parseDateFriendPayload(payload);
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleOrderReportForFriendName(event, env, dateText, friendName);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.PAST_ORDER_DATE_PREFIX)) {
+    const dateText = text
+      .slice(INTERNAL_COMMANDS.PAST_ORDER_DATE_PREFIX.length)
       .trim();
     await clearPendingActionIfNeeded(env.DB, userId, session);
-    await handleTodayReportForFriendName(event, env, friendName);
+    await handlePastOrderDateSelected(event, env, dateText);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.COST_MANAGEMENT_PREFIX)) {
+    const friendName = text
+      .slice(INTERNAL_COMMANDS.COST_MANAGEMENT_PREFIX.length)
+      .trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleCostManagementForFriendName(event, env, friendName);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.VIEW_COST_PREFIX)) {
+    const friendName = text.slice(INTERNAL_COMMANDS.VIEW_COST_PREFIX.length).trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleViewCost(event, env, friendName);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.EDIT_COST_PREFIX)) {
+    const friendName = text.slice(INTERNAL_COMMANDS.EDIT_COST_PREFIX.length).trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleEditCost(event, env, friendName);
     return true;
   }
 
@@ -151,9 +194,27 @@ async function handleInternalTextCommand(event, env, userId, text, session) {
 }
 
 async function handleRichMenuCommand(event, env, userId, text, session) {
-  if (text === COMMANDS.SELECT_FRIEND) {
+  if (text === COMMANDS.SELECT_FRIEND_FOR_BET) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
     await handleSelectFriendCommand(event, env);
+    return true;
+  }
+
+  if (text === COMMANDS.TODAY_ORDERS) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleOrderReportDateCommand(event, env, getTaipeiDateString());
+    return true;
+  }
+
+  if (text === COMMANDS.PAST_ORDERS) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handlePastOrdersCommand(event, env);
+    return true;
+  }
+
+  if (text === COMMANDS.FRIEND_MANAGEMENT) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleFriendManagementCommand(event, env);
     return true;
   }
 
@@ -163,15 +224,15 @@ async function handleRichMenuCommand(event, env, userId, text, session) {
     return true;
   }
 
-  if (text === COMMANDS.TODAY_REPORT || text === COMMANDS.FRIEND_REPORT) {
+  if (text === COMMANDS.FRIEND_LIST) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
-    await handleTodayReportCommand(event, env);
+    await handleFriendListCommand(event, env);
     return true;
   }
 
-  if (text === COMMANDS.UNAVAILABLE) {
+  if (text === COMMANDS.COST_MANAGEMENT) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
-    await handleUnavailableCommand(event, env);
+    await handleCostManagementCommand(event, env);
     return true;
   }
 
@@ -218,7 +279,14 @@ async function handleSelectFriendByName(event, env, userId, friendName) {
 
   await replyMessage(
     event.replyToken,
-    `目前來源已設定為：${friend.name}`,
+    `目前下單朋友已設定為：${friend.name}`,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleFriendManagementCommand(event, env) {
+  await replyFriendManagementMenu(
+    event.replyToken,
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -232,16 +300,83 @@ async function handleDeleteFriendCommand(event, env) {
   );
 }
 
-async function handleTodayReportCommand(event, env) {
+async function handleFriendListCommand(event, env) {
   const friends = await getFriends(env.DB);
-  await replyTodayReportFriendPicker(
+
+  if (friends.length === 0) {
+    await replyMessage(
+      event.replyToken,
+      "目前沒有朋友名單。請先新增朋友。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const lines = ["朋友列表", ""];
+  for (const [index, friend] of friends.entries()) {
+    lines.push(`${index + 1}. ${friend.name}`);
+  }
+
+  await replyMessage(
     event.replyToken,
-    friends,
+    lines.join("\n"),
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
 
-async function handleTodayReportForFriendName(event, env, friendName) {
+async function handleOrderReportDateCommand(event, env, dateText) {
+  const friends = await getFriendsWithOrdersByDate(env.DB, dateText);
+  await replyOrderReportFriendPicker(
+    event.replyToken,
+    friends,
+    dateText,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handlePastOrdersCommand(event, env) {
+  await replyPastOrdersMenu(event.replyToken, env.LINE_CHANNEL_ACCESS_TOKEN);
+}
+
+async function handlePastOrderDateSelected(event, env, dateText) {
+  if (dateText === "指定日期") {
+    await setPendingAction(env.DB, event.source.userId, PENDING_ACTIONS.PAST_ORDER_DATE);
+    await replyMessage(
+      event.replyToken,
+      "請輸入日期，格式 yyyy-MM-dd，例如 2026-05-16。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await handleOrderReportDateCommand(event, env, dateText);
+}
+
+async function handlePendingPastOrderDate(event, env, userId, text) {
+  const dateText = text.trim();
+  if (!isValidDateText(dateText)) {
+    await replyMessage(
+      event.replyToken,
+      "日期格式不正確，請輸入 yyyy-MM-dd，例如 2026-05-16。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await clearPendingAction(env.DB, userId);
+  await handleOrderReportDateCommand(event, env, dateText);
+}
+
+async function handleOrderReportForFriendName(event, env, dateText, friendName) {
+  if (!isValidDateText(dateText)) {
+    await replyMessage(
+      event.replyToken,
+      "日期格式不正確。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
   const friend = await getFriendByName(env.DB, friendName);
   if (!friend) {
     await replyMessage(
@@ -252,27 +387,66 @@ async function handleTodayReportForFriendName(event, env, friendName) {
     return;
   }
 
-  const entries = await getTodayParsedEntriesByFriend(env.DB, friend.id);
-  const imageCount = await getTodayImageMessageCountByFriend(env.DB, friend.id);
+  const entries = await getParsedEntriesByFriendAndDate(env.DB, friend.id, dateText);
+  const imageCount = await getImageMessageCountByFriendAndDate(
+    env.DB,
+    friend.id,
+    dateText
+  );
 
   if (entries.length === 0 && imageCount === 0) {
     await replyMessage(
       event.replyToken,
-      `${friend.name} 今天還沒有資料。`,
+      `${friend.name} ${dateText} 沒有注單資料。`,
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
   }
 
-  const report = buildCalculationReport(friend.name, entries, imageCount);
+  const report = buildCalculationReport(friend.name, entries, imageCount, dateText);
 
   await replyMessage(event.replyToken, report, env.LINE_CHANNEL_ACCESS_TOKEN);
 }
 
-async function handleUnavailableCommand(event, env) {
+async function handleCostManagementCommand(event, env) {
+  const friends = await getFriends(env.DB);
+  await replyCostManagementFriendPicker(
+    event.replyToken,
+    friends,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleCostManagementForFriendName(event, env, friendName) {
+  const friend = await getFriendByName(env.DB, friendName);
+  if (!friend) {
+    await replyMessage(
+      event.replyToken,
+      `找不到朋友：${friendName}。`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await replyCostActionMenu(
+    event.replyToken,
+    friend,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleViewCost(event, env, friendName) {
   await replyMessage(
     event.replyToken,
-    "備用功能目前無法使用。",
+    `${friendName} 的成本查看功能下一步會接上成本設定資料。`,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleEditCost(event, env, friendName) {
+  await replyMessage(
+    event.replyToken,
+    `${friendName} 的成本編輯功能下一步會支援設定 539、大樂透、港號與車的成本。`,
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -282,17 +456,18 @@ async function handleHelpCommand(event, env) {
     event.replyToken,
     [
       "使用方式：",
-      "1. 點下方選單的「選朋友」",
-      "2. 設定目前來源",
-      "3. 傳入這個來源的文字或圖片",
-      "4. 點「今日報表」產生目前來源今天的內容",
+      "1. 點「選朋友下單」",
+      "2. 選擇要記錄注單的朋友",
+      "3. 傳入這位朋友的文字或圖片注單",
+      "4. 點「今日注單」查看今天的注單與支數統計",
       "",
-      "新增朋友：",
-      "點「新增朋友」後，可連續輸入多位朋友名稱。",
+      "過往注單：",
+      "可選昨天、前天或輸入特定日期，再選朋友查看。",
+      "",
+      "朋友管理：",
+      "可新增朋友或刪除朋友。",
       "新增朋友只會加入名單，不會改變目前來源，也不會建立朋友之間的關聯。",
-      "",
-      "刪除朋友：",
-      "點「刪除朋友」後，選擇要刪除的朋友。",
+      "刪除朋友會先要求二次確認，並只做軟刪。",
     ].join("\n"),
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
@@ -788,6 +963,22 @@ async function saveParsedEntriesForText(db, message) {
 }
 
 async function getTodayParsedEntriesByFriend(db, friendId) {
+  return await getParsedEntriesByFriendAndDate(
+    db,
+    friendId,
+    getTaipeiDateString()
+  );
+}
+
+async function getTodayImageMessageCountByFriend(db, friendId) {
+  return await getImageMessageCountByFriendAndDate(
+    db,
+    friendId,
+    getTaipeiDateString()
+  );
+}
+
+async function getParsedEntriesByFriendAndDate(db, friendId, dateText) {
   const result = await db
     .prepare(
       `
@@ -801,18 +992,18 @@ async function getTodayParsedEntriesByFriend(db, friendId) {
         created_at
       FROM parsed_entries
       WHERE friend_id = ?
-        AND date(created_at, '+8 hours') = date('now', '+8 hours')
+        AND date(created_at, '+8 hours') = ?
       ORDER BY created_at ASC, id ASC
       LIMIT 1000
       `
     )
-    .bind(friendId)
+    .bind(friendId, dateText)
     .all();
 
   return (result.results || []).map(normalizeParsedEntryFromDb);
 }
 
-async function getTodayImageMessageCountByFriend(db, friendId) {
+async function getImageMessageCountByFriendAndDate(db, friendId, dateText) {
   const row = await db
     .prepare(
       `
@@ -820,13 +1011,36 @@ async function getTodayImageMessageCountByFriend(db, friendId) {
       FROM raw_messages
       WHERE friend_id = ?
         AND message_type = 'image'
-        AND date(created_at, '+8 hours') = date('now', '+8 hours')
+        AND date(created_at, '+8 hours') = ?
       `
     )
-    .bind(friendId)
+    .bind(friendId, dateText)
     .first();
 
   return row?.count || 0;
+}
+
+async function getFriendsWithOrdersByDate(db, dateText) {
+  const result = await db
+    .prepare(
+      `
+      SELECT DISTINCT friends.id, friends.name
+      FROM friends
+      LEFT JOIN raw_messages
+        ON raw_messages.friend_id = friends.id
+       AND date(raw_messages.created_at, '+8 hours') = ?
+      LEFT JOIN parsed_entries
+        ON parsed_entries.friend_id = friends.id
+       AND date(parsed_entries.created_at, '+8 hours') = ?
+      WHERE friends.deleted_at IS NULL
+        AND (raw_messages.id IS NOT NULL OR parsed_entries.id IS NOT NULL)
+      ORDER BY friends.id ASC
+      `
+    )
+    .bind(dateText, dateText)
+    .all();
+
+  return result.results || [];
 }
 
 function normalizeParsedEntryFromDb(row) {
@@ -847,9 +1061,14 @@ function parseJsonOrDefault(value, defaultValue) {
   }
 }
 
-function buildCalculationReport(friendName, entries, imageCount = 0) {
+function buildCalculationReport(
+  friendName,
+  entries,
+  imageCount = 0,
+  dateText = getTaipeiDateString()
+) {
   const totals = { 2: 0, 3: 0, 4: 0 };
-  const lines = [`${friendName} ${getTaipeiDateString()} 報表`, ""];
+  const lines = [`${friendName} ${dateText} 報表`, ""];
 
   if (entries.length === 0) {
     lines.push("今天沒有可計算的文字資料。");
@@ -1088,6 +1307,37 @@ function formatNumber(value) {
   return Number(value.toFixed(4)).toString();
 }
 
+function parseDateFriendPayload(payload) {
+  const [dateText = "", ...friendNameParts] = String(payload || "").split("|");
+
+  return {
+    dateText: dateText.trim(),
+    friendName: friendNameParts.join("|").trim(),
+  };
+}
+
+function isValidDateText(dateText) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return false;
+
+  const date = new Date(`${dateText}T00:00:00+08:00`);
+  return !Number.isNaN(date.getTime()) && getTaipeiDateString(date) === dateText;
+}
+
+function addDaysToTaipeiDate(days) {
+  const now = new Date();
+  const taipeiNoon = new Date(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Taipei",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now) + "T12:00:00+08:00"
+  );
+
+  taipeiNoon.setUTCDate(taipeiNoon.getUTCDate() + days);
+  return getTaipeiDateString(taipeiNoon);
+}
+
 function getTaipeiDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Taipei",
@@ -1127,6 +1377,58 @@ async function replyMessage(replyToken, text, channelAccessToken) {
         {
           type: "text",
           text,
+        },
+      ],
+    }),
+  });
+}
+
+async function replyButtonMenu(
+  replyToken,
+  channelAccessToken,
+  { altText, title, description, buttons }
+) {
+  await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${channelAccessToken}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [
+        {
+          type: "flex",
+          altText,
+          contents: {
+            type: "bubble",
+            body: {
+              type: "box",
+              layout: "vertical",
+              spacing: "md",
+              contents: [
+                {
+                  type: "text",
+                  text: title,
+                  weight: "bold",
+                  size: "lg",
+                },
+                {
+                  type: "text",
+                  text: description,
+                  size: "sm",
+                  color: "#666666",
+                  wrap: true,
+                },
+                {
+                  type: "box",
+                  layout: "vertical",
+                  spacing: "sm",
+                  contents: buttons,
+                },
+              ],
+            },
+          },
         },
       ],
     }),
@@ -1198,6 +1500,46 @@ async function replyFriendPicker(replyToken, friends, channelAccessToken) {
         },
       ],
     }),
+  });
+}
+
+async function replyFriendManagementMenu(replyToken, channelAccessToken) {
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: "朋友管理",
+    title: "朋友管理",
+    description: "新增朋友或刪除朋友。刪除會先要求二次確認。",
+    buttons: [
+      {
+        type: "button",
+        style: "primary",
+        color: "#06C755",
+        action: {
+          type: "message",
+          label: "新增朋友",
+          text: COMMANDS.ADD_FRIEND,
+        },
+      },
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: "查看朋友列表",
+          text: COMMANDS.FRIEND_LIST,
+        },
+      },
+      {
+        type: "button",
+        style: "primary",
+        color: "#D93025",
+        action: {
+          type: "message",
+          label: "刪除朋友",
+          text: COMMANDS.DELETE_FRIEND,
+        },
+      },
+    ],
   });
 }
 
@@ -1347,11 +1689,58 @@ async function replyDeleteFriendConfirmation(
   });
 }
 
-async function replyTodayReportFriendPicker(replyToken, friends, channelAccessToken) {
+async function replyPastOrdersMenu(replyToken, channelAccessToken) {
+  const yesterday = addDaysToTaipeiDate(-1);
+  const dayBeforeYesterday = addDaysToTaipeiDate(-2);
+
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: "過往注單",
+    title: "過往注單",
+    description: "請先選擇日期，再選擇要查看的朋友。",
+    buttons: [
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: `昨天 ${yesterday}`,
+          text: `${INTERNAL_COMMANDS.PAST_ORDER_DATE_PREFIX}${yesterday}`,
+        },
+      },
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: `前天 ${dayBeforeYesterday}`,
+          text: `${INTERNAL_COMMANDS.PAST_ORDER_DATE_PREFIX}${dayBeforeYesterday}`,
+        },
+      },
+      {
+        type: "button",
+        style: "secondary",
+        action: {
+          type: "message",
+          label: "特定日期",
+          text: `${INTERNAL_COMMANDS.PAST_ORDER_DATE_PREFIX}指定日期`,
+        },
+      },
+    ],
+  });
+}
+
+async function replyOrderReportFriendPicker(
+  replyToken,
+  friends,
+  dateText,
+  channelAccessToken
+) {
   if (friends.length === 0) {
     await replyMessage(
       replyToken,
-      "目前沒有朋友名單。請先新增朋友。",
+      `${dateText} 沒有任何朋友的注單資料。`,
       channelAccessToken
     );
     return;
@@ -1364,53 +1753,76 @@ async function replyTodayReportFriendPicker(replyToken, friends, channelAccessTo
     action: {
       type: "message",
       label: friend.name,
-      text: `${INTERNAL_COMMANDS.TODAY_REPORT_PREFIX}${friend.name}`,
+      text: `${INTERNAL_COMMANDS.ORDER_REPORT_PREFIX}${dateText}|${friend.name}`,
     },
   }));
 
-  await fetch("https://api.line.me/v2/bot/message/reply", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${channelAccessToken}`,
-    },
-    body: JSON.stringify({
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: `請選擇 ${dateText} 注單朋友`,
+    title: `${dateText} 注單`,
+    description: "請選擇要查看注單與支數統計的朋友。",
+    buttons,
+  });
+}
+
+async function replyCostManagementFriendPicker(
+  replyToken,
+  friends,
+  channelAccessToken
+) {
+  if (friends.length === 0) {
+    await replyMessage(
       replyToken,
-      messages: [
-        {
-          type: "flex",
-          altText: "請選擇今日報表朋友",
-          contents: {
-            type: "bubble",
-            body: {
-              type: "box",
-              layout: "vertical",
-              spacing: "md",
-              contents: [
-                {
-                  type: "text",
-                  text: "請選擇今日報表朋友",
-                  weight: "bold",
-                  size: "lg",
-                },
-                {
-                  type: "text",
-                  text: "會統整這位朋友今天已記錄的二、三、四支數。",
-                  size: "sm",
-                  color: "#666666",
-                  wrap: true,
-                },
-                {
-                  type: "box",
-                  layout: "vertical",
-                  spacing: "sm",
-                  contents: buttons,
-                },
-              ],
-            },
-          },
+      "目前沒有朋友名單。請先新增朋友。",
+      channelAccessToken
+    );
+    return;
+  }
+
+  const buttons = friends.slice(0, 12).map((friend) => ({
+    type: "button",
+    style: "primary",
+    color: "#7B61FF",
+    action: {
+      type: "message",
+      label: friend.name,
+      text: `${INTERNAL_COMMANDS.COST_MANAGEMENT_PREFIX}${friend.name}`,
+    },
+  }));
+
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: "請選擇成本管理朋友",
+    title: "成本管理",
+    description: "請先選擇朋友，再查看或編輯成本設定。",
+    buttons,
+  });
+}
+
+async function replyCostActionMenu(replyToken, friend, channelAccessToken) {
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: `成本管理：${friend.name}`,
+    title: `${friend.name} 成本管理`,
+    description: "可查看或編輯 539、大樂透、港號與車的成本。",
+    buttons: [
+      {
+        type: "button",
+        style: "primary",
+        color: "#7B61FF",
+        action: {
+          type: "message",
+          label: "查看成本",
+          text: `${INTERNAL_COMMANDS.VIEW_COST_PREFIX}${friend.name}`,
         },
-      ],
-    }),
+      },
+      {
+        type: "button",
+        style: "secondary",
+        action: {
+          type: "message",
+          label: "編輯成本",
+          text: `${INTERNAL_COMMANDS.EDIT_COST_PREFIX}${friend.name}`,
+        },
+      },
+    ],
   });
 }
