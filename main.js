@@ -10,6 +10,7 @@ const COMMANDS = {
 const INTERNAL_COMMANDS = {
   SELECT_FRIEND_PREFIX: "#",
   DELETE_FRIEND_PREFIX: "!刪除朋友:",
+  TODAY_REPORT_PREFIX: "!今日報表:",
 };
 
 const PENDING_ACTIONS = {
@@ -107,6 +108,15 @@ async function handleInternalTextCommand(event, env, userId, text, session) {
     return true;
   }
 
+  if (text.startsWith(INTERNAL_COMMANDS.TODAY_REPORT_PREFIX)) {
+    const friendName = text
+      .slice(INTERNAL_COMMANDS.TODAY_REPORT_PREFIX.length)
+      .trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleTodayReportForFriendName(event, env, friendName);
+    return true;
+  }
+
   if (text.startsWith(INTERNAL_COMMANDS.SELECT_FRIEND_PREFIX)) {
     const friendName = text
       .slice(INTERNAL_COMMANDS.SELECT_FRIEND_PREFIX.length)
@@ -133,7 +143,7 @@ async function handleRichMenuCommand(event, env, userId, text, session) {
 
   if (text === COMMANDS.TODAY_REPORT) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
-    await handleTodayReportCommand(event, env, userId);
+    await handleTodayReportCommand(event, env);
     return true;
   }
 
@@ -200,30 +210,39 @@ async function handleDeleteFriendCommand(event, env) {
   );
 }
 
-async function handleTodayReportCommand(event, env, userId) {
-  const session = await getCurrentSession(env.DB, userId);
+async function handleTodayReportCommand(event, env) {
+  const friends = await getFriends(env.DB);
+  await replyTodayReportFriendPicker(
+    event.replyToken,
+    friends,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
 
-  if (!session?.friend_id) {
+async function handleTodayReportForFriendName(event, env, friendName) {
+  const friend = await getFriendByName(env.DB, friendName);
+  if (!friend) {
     await replyMessage(
       event.replyToken,
-      "請先點「選朋友」設定目前來源。",
+      `找不到朋友：${friendName}。`,
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
   }
 
-  const messages = await getTodayMessagesByFriend(env.DB, session.friend_id);
+  const entries = await getTodayParsedEntriesByFriend(env.DB, friend.id);
+  const imageCount = await getTodayImageMessageCountByFriend(env.DB, friend.id);
 
-  if (messages.length === 0) {
+  if (entries.length === 0 && imageCount === 0) {
     await replyMessage(
       event.replyToken,
-      `${session.friend_name} 今天還沒有資料。`,
+      `${friend.name} 今天還沒有資料。`,
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
   }
 
-  const report = buildSimpleReport(session.friend_name, messages, "今日報表");
+  const report = buildCalculationReport(friend.name, entries, imageCount);
 
   await replyMessage(event.replyToken, report, env.LINE_CHANNEL_ACCESS_TOKEN);
 }
@@ -267,7 +286,7 @@ async function handleSaveTextMessage(event, env, userId, text, session) {
     return;
   }
 
-  await saveRawMessage(env.DB, {
+  const rawMessageId = await saveRawMessage(env.DB, {
     friendId: session.friend_id,
     lineUserId: userId,
     messageType: "text",
@@ -275,9 +294,16 @@ async function handleSaveTextMessage(event, env, userId, text, session) {
     imageMessageId: null,
   });
 
+  await saveParsedEntriesForText(env.DB, {
+    rawMessageId,
+    friendId: session.friend_id,
+    lineUserId: userId,
+    rawText: text,
+  });
+
   await replyMessage(
     event.replyToken,
-    `已記錄到目前來源 ${session.friend_name}：${text}`,
+    `已收到 ${session.friend_name} 的下注內容。`,
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -437,6 +463,29 @@ async function ensureDatabaseSchema(db) {
         raw_text TEXT,
         image_message_id TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (friend_id) REFERENCES friends(id)
+      )
+      `
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS parsed_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        raw_message_id INTEGER NOT NULL,
+        friend_id INTEGER NOT NULL,
+        line_user_id TEXT NOT NULL,
+        source_line_text TEXT NOT NULL,
+        number_part TEXT,
+        rule_part TEXT,
+        rows_json TEXT,
+        calculations_json TEXT,
+        total_amount REAL NOT NULL DEFAULT 0,
+        error_message TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (raw_message_id) REFERENCES raw_messages(id),
         FOREIGN KEY (friend_id) REFERENCES friends(id)
       )
       `
@@ -624,7 +673,7 @@ async function getCurrentSession(db, lineUserId) {
 }
 
 async function saveRawMessage(db, message) {
-  await db
+  const result = await db
     .prepare(
       `
       INSERT INTO raw_messages (
@@ -645,40 +694,348 @@ async function saveRawMessage(db, message) {
       message.imageMessageId
     )
     .run();
+
+  return result.meta?.last_row_id ?? null;
 }
 
-async function getTodayMessagesByFriend(db, friendId) {
+async function saveParsedEntriesForText(db, message) {
+  if (!message.rawMessageId) return;
+
+  const entries = parseTextToCalculationEntries(message.rawText);
+
+  for (const entry of entries) {
+    await db
+      .prepare(
+        `
+        INSERT INTO parsed_entries (
+          raw_message_id,
+          friend_id,
+          line_user_id,
+          source_line_text,
+          number_part,
+          rule_part,
+          rows_json,
+          calculations_json,
+          total_amount,
+          error_message
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+      )
+      .bind(
+        message.rawMessageId,
+        message.friendId,
+        message.lineUserId,
+        entry.sourceLineText,
+        entry.numberPart,
+        entry.rulePart,
+        JSON.stringify(entry.rows),
+        JSON.stringify(entry.calculations),
+        entry.totalAmount,
+        entry.errorMessage
+      )
+      .run();
+  }
+}
+
+async function getTodayParsedEntriesByFriend(db, friendId) {
   const result = await db
     .prepare(
       `
-      SELECT id, message_type, raw_text, image_message_id, created_at
-      FROM raw_messages
+      SELECT
+        id,
+        source_line_text,
+        rows_json,
+        calculations_json,
+        total_amount,
+        error_message,
+        created_at
+      FROM parsed_entries
       WHERE friend_id = ?
         AND date(created_at, '+8 hours') = date('now', '+8 hours')
-      ORDER BY created_at ASC
-      LIMIT 50
+      ORDER BY created_at ASC, id ASC
+      LIMIT 1000
       `
     )
     .bind(friendId)
     .all();
 
-  return result.results || [];
+  return (result.results || []).map(normalizeParsedEntryFromDb);
 }
 
-function buildSimpleReport(friendName, messages, reportTitle = "資料整理") {
-  const lines = [`${friendName} ${reportTitle}`, ""];
+async function getTodayImageMessageCountByFriend(db, friendId) {
+  const row = await db
+    .prepare(
+      `
+      SELECT COUNT(*) AS count
+      FROM raw_messages
+      WHERE friend_id = ?
+        AND message_type = 'image'
+        AND date(created_at, '+8 hours') = date('now', '+8 hours')
+      `
+    )
+    .bind(friendId)
+    .first();
 
-  for (const [index, message] of messages.entries()) {
-    if (message.message_type === "text") {
-      lines.push(`${index + 1}. ${message.raw_text}`);
-    } else if (message.message_type === "image") {
-      lines.push(`${index + 1}. [圖片] ${message.image_message_id}`);
-    } else {
-      lines.push(`${index + 1}. [${message.message_type}]`);
+  return row?.count || 0;
+}
+
+function normalizeParsedEntryFromDb(row) {
+  return {
+    sourceLineText: row.source_line_text,
+    rows: parseJsonOrDefault(row.rows_json, []),
+    calculations: parseJsonOrDefault(row.calculations_json, []),
+    totalAmount: row.total_amount || 0,
+    errorMessage: row.error_message,
+  };
+}
+
+function parseJsonOrDefault(value, defaultValue) {
+  try {
+    return value ? JSON.parse(value) : defaultValue;
+  } catch (error) {
+    return defaultValue;
+  }
+}
+
+function buildCalculationReport(friendName, entries, imageCount = 0) {
+  const totals = { 2: 0, 3: 0, 4: 0 };
+  const lines = [`${friendName} 今日報表`, ""];
+
+  if (entries.length === 0) {
+    lines.push("今天沒有可計算的文字資料。");
+  }
+
+  for (const [index, entry] of entries.entries()) {
+    lines.push(`${index + 1}. ${entry.sourceLineText}`);
+
+    if (entry.errorMessage) {
+      lines.push(`   無法解析：${entry.errorMessage}`);
+      continue;
     }
+
+    lines.push(`   排數：${entry.rows.length}`);
+
+    const calculationTexts = entry.calculations.map((calculation) => {
+      if (totals[calculation.pick] !== undefined) {
+        totals[calculation.pick] += calculation.amount;
+      }
+
+      return `${formatPickLabel(calculation.pick)}=${formatNumber(
+        calculation.amount
+      )}`;
+    });
+
+    lines.push(`   ${calculationTexts.join("，")}`);
+  }
+
+  lines.push("");
+  lines.push("加總");
+  lines.push(`二：${formatNumber(totals[2])}`);
+  lines.push(`三：${formatNumber(totals[3])}`);
+  lines.push(`四：${formatNumber(totals[4])}`);
+
+  if (imageCount > 0) {
+    lines.push("");
+    lines.push(`圖片 ${imageCount} 筆尚未解析。`);
   }
 
   return lines.join("\n");
+}
+
+function parseTextToCalculationEntries(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map(parseCalculationLine);
+}
+
+function parseCalculationLine(line) {
+  const parts = line.split(/\s+/);
+  const numberPart = parts[0] || "";
+  const rulePart = parts.slice(1).join(" ");
+
+  const entry = {
+    sourceLineText: line,
+    numberPart,
+    rulePart,
+    rows: [],
+    calculations: [],
+    totalAmount: 0,
+    errorMessage: null,
+  };
+
+  try {
+    if (!numberPart || !rulePart) {
+      throw new Error("缺少號碼區或規則區");
+    }
+
+    const rows = parseNumberRows(numberPart);
+    const rules = parseCalculationRules(rulePart);
+
+    entry.rows = rows;
+    entry.calculations = rules.flatMap((rule) =>
+      rule.picks.map((pick) => {
+        const baseCount = calculateRowCombinationCount(rows, pick);
+        const amount = baseCount * rule.multiplier;
+
+        return {
+          pick,
+          baseCount,
+          multiplier: rule.multiplier,
+          amount,
+        };
+      })
+    );
+    entry.totalAmount = entry.calculations.reduce(
+      (total, calculation) => total + calculation.amount,
+      0
+    );
+  } catch (error) {
+    entry.errorMessage = error.message;
+  }
+
+  return entry;
+}
+
+function parseNumberRows(numberPart) {
+  const normalized = String(numberPart)
+    .trim()
+    .replace(/[×＊*]/g, "x")
+    .replace(/X/g, "x");
+
+  const hasRowSeparator = /[x.]/.test(normalized);
+  const rowTexts = hasRowSeparator
+    ? normalized.split(/[x.]+/).filter(Boolean)
+    : splitIntoTwoDigitNumbers(normalized);
+
+  const rows = rowTexts.map((rowText) => splitIntoTwoDigitNumbers(rowText));
+
+  if (rows.length === 0 || rows.some((row) => row.length === 0)) {
+    throw new Error("號碼區沒有可用號碼");
+  }
+
+  return rows;
+}
+
+function splitIntoTwoDigitNumbers(value) {
+  const digits = String(value).replace(/\D/g, "");
+
+  if (!digits) return [];
+
+  if (digits.length % 2 !== 0) {
+    throw new Error(`號碼區位數不是偶數：${value}`);
+  }
+
+  const numbers = [];
+  for (let index = 0; index < digits.length; index += 2) {
+    numbers.push(digits.slice(index, index + 2));
+  }
+
+  return numbers;
+}
+
+function parseCalculationRules(rulePart) {
+  const rules = [];
+  const normalized = String(rulePart).replace(/[×＊*]/g, "x");
+  const pattern = /([一二兩三四五六七八九十0-9]+)\s*[xX]\s*([0-9]+(?:\.[0-9]+)?)/g;
+  let match;
+
+  while ((match = pattern.exec(normalized)) !== null) {
+    const picks = parsePickValues(match[1]);
+    const multiplier = Number(match[2]);
+
+    if (picks.length === 0 || Number.isNaN(multiplier)) {
+      continue;
+    }
+
+    rules.push({ picks, multiplier });
+  }
+
+  if (rules.length === 0) {
+    throw new Error("規則區沒有可用倍率");
+  }
+
+  return rules;
+}
+
+function parsePickValues(value) {
+  const pickText = String(value).trim();
+  const picks = [];
+
+  if (/^\d+$/.test(pickText)) {
+    for (const digit of pickText) {
+      picks.push(Number(digit));
+    }
+    return picks;
+  }
+
+  for (const char of pickText) {
+    const pick = chineseNumberToInteger(char);
+    if (pick) picks.push(pick);
+  }
+
+  return picks;
+}
+
+function chineseNumberToInteger(value) {
+  const numbers = {
+    一: 1,
+    二: 2,
+    兩: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+    十: 10,
+  };
+
+  return numbers[value] || null;
+}
+
+function calculateRowCombinationCount(rows, pick) {
+  if (pick <= 0 || pick > rows.length) return 0;
+
+  let total = 0;
+
+  function visit(startIndex, pickedCount, product) {
+    if (pickedCount === pick) {
+      total += product;
+      return;
+    }
+
+    for (let index = startIndex; index < rows.length; index += 1) {
+      visit(index + 1, pickedCount + 1, product * rows[index].length);
+    }
+  }
+
+  visit(0, 0, 1);
+  return total;
+}
+
+function formatPickLabel(pick) {
+  const labels = {
+    1: "一",
+    2: "二",
+    3: "三",
+    4: "四",
+    5: "五",
+    6: "六",
+    7: "七",
+    8: "八",
+    9: "九",
+    10: "十",
+  };
+
+  return labels[pick] || String(pick);
+}
+
+function formatNumber(value) {
+  return Number(value.toFixed(4)).toString();
 }
 
 function isAllowedUser(userId, allowedUserIds) {
@@ -826,6 +1183,74 @@ async function replyDeleteFriendPicker(replyToken, friends, channelAccessToken) 
                 {
                   type: "text",
                   text: "刪除後會從名單隱藏，已記錄資料不會刪除。",
+                  size: "sm",
+                  color: "#666666",
+                  wrap: true,
+                },
+                {
+                  type: "box",
+                  layout: "vertical",
+                  spacing: "sm",
+                  contents: buttons,
+                },
+              ],
+            },
+          },
+        },
+      ],
+    }),
+  });
+}
+
+async function replyTodayReportFriendPicker(replyToken, friends, channelAccessToken) {
+  if (friends.length === 0) {
+    await replyMessage(
+      replyToken,
+      "目前沒有朋友名單。請先新增朋友。",
+      channelAccessToken
+    );
+    return;
+  }
+
+  const buttons = friends.slice(0, 12).map((friend) => ({
+    type: "button",
+    style: "primary",
+    color: "#1A73E8",
+    action: {
+      type: "message",
+      label: friend.name,
+      text: `${INTERNAL_COMMANDS.TODAY_REPORT_PREFIX}${friend.name}`,
+    },
+  }));
+
+  await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${channelAccessToken}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [
+        {
+          type: "flex",
+          altText: "請選擇今日報表朋友",
+          contents: {
+            type: "bubble",
+            body: {
+              type: "box",
+              layout: "vertical",
+              spacing: "md",
+              contents: [
+                {
+                  type: "text",
+                  text: "請選擇今日報表朋友",
+                  weight: "bold",
+                  size: "lg",
+                },
+                {
+                  type: "text",
+                  text: "會統整這位朋友今天已記錄的二、三、四支數。",
                   size: "sm",
                   color: "#666666",
                   wrap: true,
