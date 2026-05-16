@@ -157,7 +157,7 @@ async function handleAddFriendCommand(event, env, userId) {
 
   await replyMessage(
     event.replyToken,
-    "請輸入朋友名稱。",
+    "請輸入朋友名稱。可連續輸入多位朋友，不會影響目前來源。",
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -247,8 +247,8 @@ async function handleHelpCommand(event, env) {
       "4. 點「今日報表」產生目前來源今天的內容",
       "",
       "新增朋友：",
-      "點「新增朋友」後，下一則文字會被新增為朋友名稱。",
-      "新增朋友不會改變目前來源。",
+      "點「新增朋友」後，可連續輸入多位朋友名稱。",
+      "新增朋友只會加入名單，不會改變目前來源，也不會建立朋友之間的關聯。",
       "",
       "刪除朋友：",
       "點「刪除朋友」後，選擇要刪除的朋友。",
@@ -302,22 +302,25 @@ async function handlePendingAddFriend(event, env, userId, text) {
 
   const existingFriend = await getFriendByName(env.DB, friendName);
   if (existingFriend) {
-    await clearPendingAction(env.DB, userId);
-
     await replyMessage(
       event.replyToken,
-      `朋友已存在：${existingFriend.name}`,
+      [
+        `朋友已存在：${existingFriend.name}`,
+        "可繼續輸入下一位朋友名稱，不會影響目前來源。",
+      ].join("\n"),
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
   }
 
   const friend = await createFriend(env.DB, friendName);
-  await clearPendingAction(env.DB, userId);
 
   await replyMessage(
     event.replyToken,
-    `已新增朋友：${friend.name}`,
+    [
+      `已新增朋友：${friend.name}`,
+      "可繼續輸入下一位朋友名稱，不會影響目前來源。",
+    ].join("\n"),
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
