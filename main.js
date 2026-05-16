@@ -1,100 +1,21 @@
-/**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run "npm run dev" in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run "npm run deploy" to publish your worker
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+const COMMANDS = {
+  SELECT_FRIEND: "選朋友",
+  ADD_FRIEND: "新增朋友",
+  DELETE_FRIEND: "刪除朋友",
+  TODAY_REPORT: "今日報表",
+  HELP: "說明",
+  UNAVAILABLE: "備用功能無法使用",
+};
 
-// export default {
-//   async fetch(request, env, ctx) {
-//     // You can view your logs in the Observability dashboard
-//     console.info({ message: 'Hello World Worker received a request!' }); 
-//     return new Response('Hello World!');
-//   }
-// };
+const INTERNAL_COMMANDS = {
+  SELECT_FRIEND_PREFIX: "#",
+  DELETE_FRIEND_PREFIX: "!刪除朋友:",
+};
 
+const PENDING_ACTIONS = {
+  ADD_FRIEND: "add_friend",
+};
 
-// ====================================================================================
-// 測試webhook是否有通
-// ====================================================================================
-
-// export default {
-//   async fetch(request, env, ctx) {
-//     const url = new URL(request.url);
-
-//     if (url.pathname === "/") {
-//       return new Response("LINE helper is running");
-//     }
-
-//     if (url.pathname === "/line/webhook" && request.method === "POST") {
-//       return new Response("OK");
-//     }
-
-//     return new Response("Not found", { status: 404 });
-//   },
-// };
-
-
-// ====================================================================================
-// 取得userid
-// ====================================================================================
-
-// export default {
-//   async fetch(request, env, ctx) {
-//     const url = new URL(request.url);
-
-//     if (url.pathname === "/") {
-//       return new Response("LINE helper is running");
-//     }
-
-//     if (url.pathname === "/line/webhook" && request.method === "POST") {
-//       const body = await request.json();
-
-//       for (const event of body.events || []) {
-//         //let msg=`收到：${event.message.text}`;
-//         let msg = `你的 userId 是：${event.source.userId}`;
-//         if (event.type === "message" && event.message.type === "text") {
-//           await replyMessage(
-//             event.replyToken,
-//             msg,
-//             env.LINE_CHANNEL_ACCESS_TOKEN
-//           );
-//         }
-//       }
-
-//       return new Response("OK");
-//     }
-
-//     return new Response("Not found", { status: 404 });
-//   },
-// };
-
-// async function replyMessage(replyToken, text, channelAccessToken) {
-//   await fetch("https://api.line.me/v2/bot/message/reply", {
-//     method: "POST",
-//     headers: {
-//       "Content-Type": "application/json",
-//       Authorization: `Bearer ${channelAccessToken}`,
-//     },
-//     body: JSON.stringify({
-//       replyToken,
-//       messages: [
-//         {
-//           type: "text",
-//           text,
-//         },
-//       ],
-//     }),
-//   });
-// }
-
-
-// ====================================================================================
-// 添加用戶白名單
-// ====================================================================================
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -152,162 +73,191 @@ export default {
 
 async function handleTextMessage(event, env, userId) {
   const text = event.message.text.trim();
-  const deleteFriendPrefix = "!刪除朋友:";
 
-  if (text === "新增朋友") {
-    await setPendingAction(env.DB, userId, "add_friend");
-
-    await replyMessage(
-      event.replyToken,
-      "請輸入朋友名稱。",
-      env.LINE_CHANNEL_ACCESS_TOKEN
-    );
+  if (text === COMMANDS.ADD_FRIEND) {
+    await handleAddFriendCommand(event, env, userId);
     return;
   }
 
   const session = await getCurrentSession(env.DB, userId);
 
-  if (text.startsWith(deleteFriendPrefix)) {
-    const friendName = text.slice(deleteFriendPrefix.length).trim();
-    if (session?.pending_action) {
-      await clearPendingAction(env.DB, userId);
-    }
-    await handleDeleteFriend(event, env, friendName);
+  if (await handleInternalTextCommand(event, env, userId, text, session)) {
     return;
   }
 
-  if (text.startsWith("#")) {
-    const friendName = text.slice(1).trim();
-
-    const friend = await getFriendByName(env.DB, friendName);
-    if (!friend) {
-      await replyMessage(
-        event.replyToken,
-        `找不到朋友：${friendName}。請先新增朋友。`,
-        env.LINE_CHANNEL_ACCESS_TOKEN
-      );
-      return;
-    }
-
-    await setCurrentFriend(env.DB, userId, friend.id);
-
-    await replyMessage(
-      event.replyToken,
-      `目前來源已設定為：${friend.name}`,
-      env.LINE_CHANNEL_ACCESS_TOKEN
-    );
+  if (await handleRichMenuCommand(event, env, userId, text, session)) {
     return;
   }
 
-  if (text === "選朋友") {
-    if (session?.pending_action) {
-      await clearPendingAction(env.DB, userId);
-    }
-
-    const friends = await getFriends(env.DB);
-    await replyFriendPicker(
-      event.replyToken,
-      friends,
-      env.LINE_CHANNEL_ACCESS_TOKEN
-    );
-    return;
-  }
-
-  if (text === "刪除朋友") {
-    if (session?.pending_action) {
-      await clearPendingAction(env.DB, userId);
-    }
-
-    const friends = await getFriends(env.DB);
-    await replyDeleteFriendPicker(
-      event.replyToken,
-      friends,
-      env.LINE_CHANNEL_ACCESS_TOKEN
-    );
-    return;
-  }
-
-  if (text === "今日報表") {
-    if (session?.pending_action) {
-      await clearPendingAction(env.DB, userId);
-    }
-
-    const session = await getCurrentSession(env.DB, userId);
-
-    if (!session?.friend_id) {
-      await replyMessage(
-        event.replyToken,
-        "請先點「選朋友」設定目前來源。",
-        env.LINE_CHANNEL_ACCESS_TOKEN
-      );
-      return;
-    }
-
-    const messages = await getTodayMessagesByFriend(env.DB, session.friend_id);
-
-    if (messages.length === 0) {
-      await replyMessage(
-        event.replyToken,
-        `${session.friend_name} 今天還沒有資料。`,
-        env.LINE_CHANNEL_ACCESS_TOKEN
-      );
-      return;
-    }
-
-    const report = buildSimpleReport(session.friend_name, messages, "今日報表");
-
-    await replyMessage(
-      event.replyToken,
-      report,
-      env.LINE_CHANNEL_ACCESS_TOKEN
-    );
-    return;
-  }
-
-  if (text === "備用功能無法使用") {
-    if (session?.pending_action) {
-      await clearPendingAction(env.DB, userId);
-    }
-
-    await replyMessage(
-      event.replyToken,
-      "備用功能目前無法使用。",
-      env.LINE_CHANNEL_ACCESS_TOKEN
-    );
-    return;
-  }
-
-  if (text === "說明") {
-    if (session?.pending_action) {
-      await clearPendingAction(env.DB, userId);
-    }
-
-    await replyMessage(
-      event.replyToken,
-      [
-        "使用方式：",
-        "1. 點下方選單的「選朋友」",
-        "2. 設定目前來源",
-        "3. 傳入這個來源的文字或圖片",
-        "4. 點「今日報表」產生目前來源今天的內容",
-        "",
-        "新增朋友：",
-        "點「新增朋友」後，下一則文字會被新增為朋友名稱。",
-        "新增朋友不會改變目前來源。",
-        "",
-        "刪除朋友：",
-        "點「刪除朋友」後，選擇要刪除的朋友。",
-      ].join("\n"),
-      env.LINE_CHANNEL_ACCESS_TOKEN
-    );
-    return;
-  }
-
-  if (session?.pending_action === "add_friend") {
+  if (session?.pending_action === PENDING_ACTIONS.ADD_FRIEND) {
     await handlePendingAddFriend(event, env, userId, text);
     return;
   }
 
+  await handleSaveTextMessage(event, env, userId, text, session);
+}
+
+async function handleInternalTextCommand(event, env, userId, text, session) {
+  if (text.startsWith(INTERNAL_COMMANDS.DELETE_FRIEND_PREFIX)) {
+    const friendName = text
+      .slice(INTERNAL_COMMANDS.DELETE_FRIEND_PREFIX.length)
+      .trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleDeleteFriend(event, env, friendName);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.SELECT_FRIEND_PREFIX)) {
+    const friendName = text
+      .slice(INTERNAL_COMMANDS.SELECT_FRIEND_PREFIX.length)
+      .trim();
+    await handleSelectFriendByName(event, env, userId, friendName);
+    return true;
+  }
+
+  return false;
+}
+
+async function handleRichMenuCommand(event, env, userId, text, session) {
+  if (text === COMMANDS.SELECT_FRIEND) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleSelectFriendCommand(event, env);
+    return true;
+  }
+
+  if (text === COMMANDS.DELETE_FRIEND) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleDeleteFriendCommand(event, env);
+    return true;
+  }
+
+  if (text === COMMANDS.TODAY_REPORT) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleTodayReportCommand(event, env, userId);
+    return true;
+  }
+
+  if (text === COMMANDS.UNAVAILABLE) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleUnavailableCommand(event, env);
+    return true;
+  }
+
+  if (text === COMMANDS.HELP) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleHelpCommand(event, env);
+    return true;
+  }
+
+  return false;
+}
+
+async function handleAddFriendCommand(event, env, userId) {
+  await setPendingAction(env.DB, userId, PENDING_ACTIONS.ADD_FRIEND);
+
+  await replyMessage(
+    event.replyToken,
+    "請輸入朋友名稱。",
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleSelectFriendCommand(event, env) {
+  const friends = await getFriends(env.DB);
+  await replyFriendPicker(
+    event.replyToken,
+    friends,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleSelectFriendByName(event, env, userId, friendName) {
+  const friend = await getFriendByName(env.DB, friendName);
+  if (!friend) {
+    await replyMessage(
+      event.replyToken,
+      `找不到朋友：${friendName}。請先新增朋友。`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await setCurrentFriend(env.DB, userId, friend.id);
+
+  await replyMessage(
+    event.replyToken,
+    `目前來源已設定為：${friend.name}`,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleDeleteFriendCommand(event, env) {
+  const friends = await getFriends(env.DB);
+  await replyDeleteFriendPicker(
+    event.replyToken,
+    friends,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleTodayReportCommand(event, env, userId) {
+  const session = await getCurrentSession(env.DB, userId);
+
+  if (!session?.friend_id) {
+    await replyMessage(
+      event.replyToken,
+      "請先點「選朋友」設定目前來源。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const messages = await getTodayMessagesByFriend(env.DB, session.friend_id);
+
+  if (messages.length === 0) {
+    await replyMessage(
+      event.replyToken,
+      `${session.friend_name} 今天還沒有資料。`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const report = buildSimpleReport(session.friend_name, messages, "今日報表");
+
+  await replyMessage(event.replyToken, report, env.LINE_CHANNEL_ACCESS_TOKEN);
+}
+
+async function handleUnavailableCommand(event, env) {
+  await replyMessage(
+    event.replyToken,
+    "備用功能目前無法使用。",
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleHelpCommand(event, env) {
+  await replyMessage(
+    event.replyToken,
+    [
+      "使用方式：",
+      "1. 點下方選單的「選朋友」",
+      "2. 設定目前來源",
+      "3. 傳入這個來源的文字或圖片",
+      "4. 點「今日報表」產生目前來源今天的內容",
+      "",
+      "新增朋友：",
+      "點「新增朋友」後，下一則文字會被新增為朋友名稱。",
+      "新增朋友不會改變目前來源。",
+      "",
+      "刪除朋友：",
+      "點「刪除朋友」後，選擇要刪除的朋友。",
+    ].join("\n"),
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleSaveTextMessage(event, env, userId, text, session) {
   if (!session?.friend_id) {
     await replyMessage(
       event.replyToken,
@@ -330,6 +280,12 @@ async function handleTextMessage(event, env, userId) {
     `已記錄到目前來源 ${session.friend_name}：${text}`,
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
+}
+
+async function clearPendingActionIfNeeded(db, userId, session) {
+  if (session?.pending_action) {
+    await clearPendingAction(db, userId);
+  }
 }
 
 async function handlePendingAddFriend(event, env, userId, text) {
@@ -398,7 +354,7 @@ async function handleDeleteFriend(event, env, friendName) {
 async function handleImageMessage(event, env, userId) {
   const session = await getCurrentSession(env.DB, userId);
 
-  if (session?.pending_action === "add_friend") {
+  if (session?.pending_action === PENDING_ACTIONS.ADD_FRIEND) {
     await replyMessage(
       event.replyToken,
       "請輸入文字作為朋友名稱，不要傳圖片。",
@@ -407,6 +363,10 @@ async function handleImageMessage(event, env, userId) {
     return;
   }
 
+  await handleSaveImageMessage(event, env, userId, session);
+}
+
+async function handleSaveImageMessage(event, env, userId, session) {
   if (!session?.friend_id) {
     await replyMessage(
       event.replyToken,
