@@ -150,6 +150,7 @@ export default {
 
 async function handleTextMessage(event, env, userId) {
   const text = event.message.text.trim();
+  const session = await getCurrentSession(env.DB, userId);
 
   if (text === "選朋友") {
     const friends = await getFriends(env.DB);
@@ -238,36 +239,15 @@ async function handleTextMessage(event, env, userId) {
   }
 
   if (text === "新增朋友") {
-  await replyMessage(
-    event.replyToken,
-    "請輸入：新增朋友 朋友名稱\n例如：新增朋友 小華",
-    env.LINE_CHANNEL_ACCESS_TOKEN
-  );
-  return;
-}
+    await setPendingAction(env.DB, userId, "add_friend");
 
-if (text.startsWith("新增朋友 ")) {
-  const friendName = text.replace("新增朋友 ", "").trim();
-
-  if (!friendName) {
     await replyMessage(
       event.replyToken,
-      "請輸入朋友名稱，例如：新增朋友 小華",
+      "請輸入朋友名稱。",
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
   }
-
-  const friend = await createFriend(env.DB, friendName);
-
-  await replyMessage(
-    event.replyToken,
-    `已新增朋友：${friend.name}`,
-    env.LINE_CHANNEL_ACCESS_TOKEN
-  );
-  return;
-}
-
 
   if (text === "說明") {
     await replyMessage(
@@ -278,13 +258,20 @@ if (text.startsWith("新增朋友 ")) {
         "2. 選擇要整理資料的朋友",
         "3. 傳入朋友給你的文字或圖片",
         "4. 點「朋友報表」產生可轉傳的內容",
+        "",
+        "新增朋友：",
+        "點「新增朋友」後，可以連續輸入多個朋友名稱。",
+        "要結束新增模式，請點「選朋友」並選擇朋友，或點「清除來源」。",
       ].join("\n"),
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
   }
 
-  const session = await getCurrentSession(env.DB, userId);
+  if (session?.pending_action === "add_friend") {
+    await handlePendingAddFriend(event, env, userId, text);
+    return;
+  }
 
   if (!session?.friend_id) {
     await replyMessage(
@@ -310,8 +297,42 @@ if (text.startsWith("新增朋友 ")) {
   );
 }
 
+async function handlePendingAddFriend(event, env, userId, text) {
+  const friendName = text.trim();
+
+  if (!friendName) {
+    await replyMessage(
+      event.replyToken,
+      "朋友名稱不能是空白，請重新輸入朋友名稱。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const friend = await createFriend(env.DB, friendName);
+
+  await replyMessage(
+    event.replyToken,
+    [
+      `已新增朋友：${friend.name}`,
+      "可以直接輸入下一位朋友名稱繼續新增。",
+      "完成後請點「選朋友」選擇要記錄資料的朋友。",
+    ].join("\n"),
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
 async function handleImageMessage(event, env, userId) {
   const session = await getCurrentSession(env.DB, userId);
+
+  if (session?.pending_action === "add_friend") {
+    await replyMessage(
+      event.replyToken,
+      "請輸入文字作為朋友名稱，不要傳圖片。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
 
   if (!session?.friend_id) {
     await replyMessage(
@@ -365,11 +386,17 @@ async function setCurrentFriend(db, lineUserId, friendId) {
   await db
     .prepare(
       `
-      INSERT INTO user_sessions (line_user_id, current_friend_id, updated_at)
-      VALUES (?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO user_sessions (
+        line_user_id,
+        current_friend_id,
+        pending_action,
+        updated_at
+      )
+      VALUES (?, ?, NULL, CURRENT_TIMESTAMP)
       ON CONFLICT(line_user_id)
       DO UPDATE SET
         current_friend_id = excluded.current_friend_id,
+        pending_action = NULL,
         updated_at = CURRENT_TIMESTAMP
       `
     )
@@ -381,12 +408,48 @@ async function clearCurrentFriend(db, lineUserId) {
   await db
     .prepare(
       `
-      INSERT INTO user_sessions (line_user_id, current_friend_id, updated_at)
-      VALUES (?, NULL, CURRENT_TIMESTAMP)
+      INSERT INTO user_sessions (
+        line_user_id,
+        current_friend_id,
+        pending_action,
+        updated_at
+      )
+      VALUES (?, NULL, NULL, CURRENT_TIMESTAMP)
       ON CONFLICT(line_user_id)
       DO UPDATE SET
         current_friend_id = NULL,
+        pending_action = NULL,
         updated_at = CURRENT_TIMESTAMP
+      `
+    )
+    .bind(lineUserId)
+    .run();
+}
+
+async function setPendingAction(db, lineUserId, pendingAction) {
+  await db
+    .prepare(
+      `
+      INSERT INTO user_sessions (line_user_id, pending_action, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(line_user_id)
+      DO UPDATE SET
+        pending_action = excluded.pending_action,
+        updated_at = CURRENT_TIMESTAMP
+      `
+    )
+    .bind(lineUserId, pendingAction)
+    .run();
+}
+
+async function clearPendingAction(db, lineUserId) {
+  await db
+    .prepare(
+      `
+      UPDATE user_sessions
+      SET pending_action = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE line_user_id = ?
       `
     )
     .bind(lineUserId)
@@ -399,6 +462,7 @@ async function getCurrentSession(db, lineUserId) {
       `
       SELECT
         user_sessions.current_friend_id AS friend_id,
+        user_sessions.pending_action AS pending_action,
         friends.name AS friend_name
       FROM user_sessions
       LEFT JOIN friends ON friends.id = user_sessions.current_friend_id
