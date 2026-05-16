@@ -106,6 +106,8 @@ export default {
     if (url.pathname === "/line/webhook" && request.method === "POST") {
       const body = await request.json();
 
+      await ensureDatabaseSchema(env.DB);
+
       for (const event of body.events || []) {
         const userId = event.source?.userId;
 
@@ -150,15 +152,22 @@ export default {
 
 async function handleTextMessage(event, env, userId) {
   const text = event.message.text.trim();
-  const session = await getCurrentSession(env.DB, userId);
 
-  if (text === "選朋友") {
-    const friends = await getFriends(env.DB);
-    await replyFriendPicker(
+  if (text === "新增朋友") {
+    await setPendingAction(env.DB, userId, "add_friend");
+
+    await replyMessage(
       event.replyToken,
-      friends,
+      "請輸入朋友名稱。",
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
+    return;
+  }
+
+  const session = await getCurrentSession(env.DB, userId);
+
+  if (session?.pending_action === "add_friend") {
+    await handlePendingAddFriend(event, env, userId, text);
     return;
   }
 
@@ -180,6 +189,16 @@ async function handleTextMessage(event, env, userId) {
     await replyMessage(
       event.replyToken,
       `目前來源已設定為：${friend.name}`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  if (text === "選朋友") {
+    const friends = await getFriends(env.DB);
+    await replyFriendPicker(
+      event.replyToken,
+      friends,
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
@@ -238,17 +257,6 @@ async function handleTextMessage(event, env, userId) {
     return;
   }
 
-  if (text === "新增朋友") {
-    await setPendingAction(env.DB, userId, "add_friend");
-
-    await replyMessage(
-      event.replyToken,
-      "請輸入朋友名稱。",
-      env.LINE_CHANNEL_ACCESS_TOKEN
-    );
-    return;
-  }
-
   if (text === "說明") {
     await replyMessage(
       event.replyToken,
@@ -260,16 +268,11 @@ async function handleTextMessage(event, env, userId) {
         "4. 點「朋友報表」產生可轉傳的內容",
         "",
         "新增朋友：",
-        "點「新增朋友」後，可以連續輸入多個朋友名稱。",
-        "要結束新增模式，請點「選朋友」並選擇朋友，或點「清除來源」。",
+        "點「新增朋友」後，下一則文字會被新增為朋友名稱。",
+        "新增朋友不會改變目前選定的朋友。",
       ].join("\n"),
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
-    return;
-  }
-
-  if (session?.pending_action === "add_friend") {
-    await handlePendingAddFriend(event, env, userId, text);
     return;
   }
 
@@ -309,15 +312,24 @@ async function handlePendingAddFriend(event, env, userId, text) {
     return;
   }
 
+  const existingFriend = await getFriendByName(env.DB, friendName);
+  if (existingFriend) {
+    await clearPendingAction(env.DB, userId);
+
+    await replyMessage(
+      event.replyToken,
+      `朋友已存在：${existingFriend.name}`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
   const friend = await createFriend(env.DB, friendName);
+  await clearPendingAction(env.DB, userId);
 
   await replyMessage(
     event.replyToken,
-    [
-      `已新增朋友：${friend.name}`,
-      "可以直接輸入下一位朋友名稱繼續新增。",
-      "完成後請點「選朋友」選擇要記錄資料的朋友。",
-    ].join("\n"),
+    `已新增朋友：${friend.name}`,
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -356,6 +368,67 @@ async function handleImageMessage(event, env, userId) {
     `已收到圖片，並存到 ${session.friend_name}。圖片解析下一步啟用。`,
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
+}
+
+async function ensureDatabaseSchema(db) {
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS friends (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+      `
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        line_user_id TEXT PRIMARY KEY,
+        current_friend_id INTEGER,
+        pending_action TEXT,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (current_friend_id) REFERENCES friends(id)
+      )
+      `
+    )
+    .run();
+
+  await ensureColumn(db, "user_sessions", "pending_action", "TEXT");
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS raw_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        friend_id INTEGER,
+        line_user_id TEXT NOT NULL,
+        message_type TEXT NOT NULL,
+        raw_text TEXT,
+        image_message_id TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (friend_id) REFERENCES friends(id)
+      )
+      `
+    )
+    .run();
+}
+
+async function ensureColumn(db, tableName, columnName, columnDefinition) {
+  const result = await db.prepare(`PRAGMA table_info(${tableName})`).all();
+  const columns = result.results || [];
+  const hasColumn = columns.some((column) => column.name === columnName);
+
+  if (!hasColumn) {
+    await db
+      .prepare(
+        `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`
+      )
+      .run();
+  }
 }
 
 async function getFriends(db) {
