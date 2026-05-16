@@ -207,7 +207,7 @@ async function handleTextMessage(event, env, userId) {
   if (text === "今日整理") {
     await replyMessage(
       event.replyToken,
-      "今日整理功能下一步會依朋友彙整今天資料。",
+      "今日整理功能下一步會整理目前來源今天的資料。",
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
@@ -219,7 +219,7 @@ async function handleTextMessage(event, env, userId) {
     if (!session?.friend_id) {
       await replyMessage(
         event.replyToken,
-        "請先點「選朋友」選擇朋友。",
+        "請先點「選朋友」設定目前來源。",
         env.LINE_CHANNEL_ACCESS_TOKEN
       );
       return;
@@ -263,13 +263,13 @@ async function handleTextMessage(event, env, userId) {
       [
         "使用方式：",
         "1. 點下方選單的「選朋友」",
-        "2. 選擇要整理資料的朋友",
-        "3. 傳入朋友給你的文字或圖片",
-        "4. 點「朋友報表」產生可轉傳的內容",
+        "2. 設定目前來源",
+        "3. 傳入這個來源的文字或圖片",
+        "4. 點「朋友報表」產生目前來源的內容",
         "",
         "新增朋友：",
         "點「新增朋友」後，下一則文字會被新增為朋友名稱。",
-        "新增朋友不會改變目前選定的朋友。",
+        "新增朋友不會改變目前來源。",
       ].join("\n"),
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
@@ -279,7 +279,7 @@ async function handleTextMessage(event, env, userId) {
   if (!session?.friend_id) {
     await replyMessage(
       event.replyToken,
-      "請先點「選朋友」選擇這筆資料要歸到哪位朋友。",
+      "請先點「選朋友」設定目前來源，再傳入資料。",
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
@@ -295,7 +295,7 @@ async function handleTextMessage(event, env, userId) {
 
   await replyMessage(
     event.replyToken,
-    `已存到 ${session.friend_name}：${text}`,
+    `已記錄到目前來源 ${session.friend_name}：${text}`,
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -349,7 +349,7 @@ async function handleImageMessage(event, env, userId) {
   if (!session?.friend_id) {
     await replyMessage(
       event.replyToken,
-      "請先點「選朋友」選擇這張圖片要歸到哪位朋友。",
+      "請先點「選朋友」設定目前來源，再傳入圖片。",
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
@@ -365,7 +365,7 @@ async function handleImageMessage(event, env, userId) {
 
   await replyMessage(
     event.replyToken,
-    `已收到圖片，並存到 ${session.friend_name}。圖片解析下一步啟用。`,
+    `已收到圖片，並記錄到目前來源 ${session.friend_name}。圖片解析下一步啟用。`,
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -679,7 +679,7 @@ async function replyFriendPicker(replyToken, friends, channelAccessToken) {
                 },
                 {
                   type: "text",
-                  text: "選好後，接下來傳入的資料會歸到這位朋友。",
+                  text: "選好後，接下來傳入的資料會記錄到目前來源。",
                   size: "sm",
                   color: "#666666",
                   wrap: true,
