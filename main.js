@@ -20,12 +20,25 @@ const INTERNAL_COMMANDS = {
   COST_MANAGEMENT_PREFIX: "!成本管理:",
   VIEW_COST_PREFIX: "!查看成本:",
   EDIT_COST_PREFIX: "!編輯成本:",
+  APPLY_DEFAULT_COST_PREFIX: "!套用預設成本:",
+  MANUAL_EDIT_COST_PREFIX: "!手動編輯成本:",
 };
 
 const PENDING_ACTIONS = {
   ADD_FRIEND: "add_friend",
   PAST_ORDER_DATE: "past_order_date",
+  EDIT_COST_PREFIX: "edit_cost:",
 };
+
+const COST_GAME_TYPES = ["539", "大樂透", "港號"];
+const DEFAULT_COST_VALUES_BY_GAME = {
+  "539": [70, 75, 80, 70],
+  "大樂透": [70, 75, 80, 70],
+  "港號": [70, 75, 80, 70],
+};
+const DEFAULT_COST_ROWS = COST_GAME_TYPES.map((gameType) =>
+  buildCostRowFromValues(gameType, DEFAULT_COST_VALUES_BY_GAME[gameType])
+);
 
 export default {
   async fetch(request, env, ctx) {
@@ -110,6 +123,11 @@ async function handleTextMessage(event, env, userId) {
     return;
   }
 
+  if (session?.pending_action?.startsWith(PENDING_ACTIONS.EDIT_COST_PREFIX)) {
+    await handlePendingEditCost(event, env, userId, text, session);
+    return;
+  }
+
   await handleSaveTextMessage(event, env, userId, text, session);
 }
 
@@ -179,6 +197,24 @@ async function handleInternalTextCommand(event, env, userId, text, session) {
     const friendName = text.slice(INTERNAL_COMMANDS.EDIT_COST_PREFIX.length).trim();
     await clearPendingActionIfNeeded(env.DB, userId, session);
     await handleEditCost(event, env, friendName);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.APPLY_DEFAULT_COST_PREFIX)) {
+    const friendName = text
+      .slice(INTERNAL_COMMANDS.APPLY_DEFAULT_COST_PREFIX.length)
+      .trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleApplyDefaultCost(event, env, friendName);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.MANUAL_EDIT_COST_PREFIX)) {
+    const friendName = text
+      .slice(INTERNAL_COMMANDS.MANUAL_EDIT_COST_PREFIX.length)
+      .trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleManualEditCost(event, env, friendName);
     return true;
   }
 
@@ -436,17 +472,160 @@ async function handleCostManagementForFriendName(event, env, friendName) {
 }
 
 async function handleViewCost(event, env, friendName) {
+  const friend = await getFriendByName(env.DB, friendName);
+  if (!friend) {
+    await replyMessage(
+      event.replyToken,
+      `找不到朋友：${friendName}。`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const { costs, usedDefaultCosts } = await getOrCreateFriendCosts(
+    env.DB,
+    friend.id
+  );
+  const message = usedDefaultCosts
+    ? [
+        `${friend.name} 尚未設定成本，已自動套用預設成本。`,
+        "",
+        buildCostReport(friend.name, costs),
+      ].join("\n")
+    : buildCostReport(friend.name, costs);
+
   await replyMessage(
     event.replyToken,
-    `${friendName} 的成本查看功能下一步會接上成本設定資料。`,
+    message,
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
 
 async function handleEditCost(event, env, friendName) {
+  const friend = await getFriendByName(env.DB, friendName);
+  if (!friend) {
+    await replyMessage(
+      event.replyToken,
+      `找不到朋友：${friendName}。`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await replyCostEditModeMenu(
+    event.replyToken,
+    friend,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleApplyDefaultCost(event, env, friendName) {
+  const friend = await getFriendByName(env.DB, friendName);
+  if (!friend) {
+    await replyMessage(
+      event.replyToken,
+      `找不到朋友：${friendName}。`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await saveFriendCosts(env.DB, friend.id, DEFAULT_COST_ROWS);
+  const costs = await getFriendCosts(env.DB, friend.id);
+
   await replyMessage(
     event.replyToken,
-    `${friendName} 的成本編輯功能下一步會支援設定 539、大樂透、港號與車的成本。`,
+    [`已套用 ${friend.name} 的預設成本。`, "", buildCostReport(friend.name, costs)].join(
+      "\n"
+    ),
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleManualEditCost(event, env, friendName) {
+  const friend = await getFriendByName(env.DB, friendName);
+  if (!friend) {
+    await replyMessage(
+      event.replyToken,
+      `找不到朋友：${friendName}。`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await setPendingAction(
+    env.DB,
+    event.source.userId,
+    buildEditCostPendingAction(friend.id, 0, [])
+  );
+
+  await replyCostInputPrompt(
+    event.replyToken,
+    friend.name,
+    COST_GAME_TYPES[0],
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handlePendingEditCost(event, env, userId, text, session) {
+  const state = parseEditCostPendingAction(session.pending_action);
+  const friendId = state.friendId;
+  const friend = await getFriendById(env.DB, friendId);
+
+  if (!friend) {
+    await clearPendingAction(env.DB, userId);
+    await replyMessage(
+      event.replyToken,
+      "找不到要編輯成本的朋友，已取消編輯模式。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  let costRow;
+  const gameType = COST_GAME_TYPES[state.gameIndex];
+  try {
+    costRow = parseCostCsvLine(gameType, text);
+  } catch (error) {
+    await replyCostInputPrompt(
+      event.replyToken,
+      friend.name,
+      gameType,
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+      `成本格式不正確：${error.message}`
+    );
+    return;
+  }
+
+  const costRows = [...state.costRows, costRow];
+  const nextGameIndex = state.gameIndex + 1;
+
+  if (nextGameIndex < COST_GAME_TYPES.length) {
+    await setPendingAction(
+      env.DB,
+      userId,
+      buildEditCostPendingAction(friend.id, nextGameIndex, costRows)
+    );
+
+    await replyCostInputPrompt(
+      event.replyToken,
+      friend.name,
+      COST_GAME_TYPES[nextGameIndex],
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+      `已暫存「${gameType}」成本。`
+    );
+    return;
+  }
+
+  await saveFriendCosts(env.DB, friend.id, costRows);
+  await clearPendingAction(env.DB, userId);
+
+  const costs = await getFriendCosts(env.DB, friend.id);
+  await replyMessage(
+    event.replyToken,
+    [`已更新 ${friend.name} 的成本設定。`, "", buildCostReport(friend.name, costs)].join(
+      "\n"
+    ),
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -715,6 +894,24 @@ async function ensureDatabaseSchema(db) {
       `
     )
     .run();
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS friend_costs (
+        friend_id INTEGER NOT NULL,
+        game_type TEXT NOT NULL,
+        star2_cost REAL NOT NULL DEFAULT 0,
+        star3_cost REAL NOT NULL DEFAULT 0,
+        star4_cost REAL NOT NULL DEFAULT 0,
+        car_cost REAL NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (friend_id, game_type),
+        FOREIGN KEY (friend_id) REFERENCES friends(id)
+      )
+      `
+    )
+    .run();
 }
 
 async function ensureColumn(db, tableName, columnName, columnDefinition) {
@@ -757,6 +954,20 @@ async function getFriendByName(db, name) {
       `
     )
     .bind(name)
+    .first();
+}
+
+async function getFriendById(db, id) {
+  return await db
+    .prepare(
+      `
+      SELECT id, name
+      FROM friends
+      WHERE id = ?
+        AND deleted_at IS NULL
+      `
+    )
+    .bind(id)
     .first();
 }
 
@@ -823,6 +1034,77 @@ async function deleteFriend(db, friendId) {
     )
     .bind(friendId)
     .run();
+}
+
+async function getFriendCosts(db, friendId) {
+  const result = await db
+    .prepare(
+      `
+      SELECT game_type, star2_cost, star3_cost, star4_cost, car_cost, updated_at
+      FROM friend_costs
+      WHERE friend_id = ?
+      ORDER BY
+        CASE game_type
+          WHEN '539' THEN 1
+          WHEN '大樂透' THEN 2
+          WHEN '港號' THEN 3
+          ELSE 4
+        END
+      `
+    )
+    .bind(friendId)
+    .all();
+
+  return result.results || [];
+}
+
+async function getOrCreateFriendCosts(db, friendId) {
+  let costs = await getFriendCosts(db, friendId);
+
+  if (costs.length > 0) {
+    return { costs, usedDefaultCosts: false };
+  }
+
+  await saveFriendCosts(db, friendId, DEFAULT_COST_ROWS);
+  costs = await getFriendCosts(db, friendId);
+
+  return { costs, usedDefaultCosts: true };
+}
+
+async function saveFriendCosts(db, friendId, costRows) {
+  for (const row of costRows) {
+    await db
+      .prepare(
+        `
+        INSERT INTO friend_costs (
+          friend_id,
+          game_type,
+          star2_cost,
+          star3_cost,
+          star4_cost,
+          car_cost,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(friend_id, game_type)
+        DO UPDATE SET
+          star2_cost = excluded.star2_cost,
+          star3_cost = excluded.star3_cost,
+          star4_cost = excluded.star4_cost,
+          car_cost = excluded.car_cost,
+          updated_at = CURRENT_TIMESTAMP
+        `
+      )
+      .bind(
+        friendId,
+        row.gameType,
+        row.star2Cost,
+        row.star3Cost,
+        row.star4Cost,
+        row.carCost
+      )
+      .run();
+  }
 }
 
 async function setCurrentFriend(db, lineUserId, friendId) {
@@ -1112,6 +1394,29 @@ function buildCalculationReport(
   return lines.join("\n");
 }
 
+function buildCostReport(friendName, costs) {
+  const lines = [`${friendName} 成本設定`, ""];
+
+  if (costs.length === 0) {
+    lines.push("目前尚未設定成本。查看成本時會自動套用預設成本。");
+    return lines.join("\n");
+  }
+
+  for (const cost of costs) {
+    lines.push(
+      [
+        cost.game_type,
+        `二${formatNumber(cost.star2_cost)}`,
+        `三${formatNumber(cost.star3_cost)}`,
+        `四${formatNumber(cost.star4_cost)}`,
+        `車${formatNumber(cost.car_cost)}`,
+      ].join(" ")
+    );
+  }
+
+  return lines.join("\n");
+}
+
 function parseTextToCalculationEntries(text) {
   return String(text || "")
     .split(/\r?\n/)
@@ -1166,6 +1471,56 @@ function parseCalculationLine(line) {
   }
 
   return entry;
+}
+
+function parseCostCsvLine(gameType, text) {
+  const values = String(text || "")
+    .trim()
+    .split(",")
+    .map((value) => value.trim());
+  const exampleText = formatCostValues(DEFAULT_COST_VALUES_BY_GAME[gameType]);
+
+  if (values.length !== 4) {
+    throw new Error(`請輸入四個用逗號分隔的數字，例如 ${exampleText}`);
+  }
+
+  const numbers = values.map((value) => Number(value));
+  if (numbers.some((value) => Number.isNaN(value))) {
+    throw new Error(`成本只能包含數字與逗號，例如 ${exampleText}`);
+  }
+
+  return buildCostRowFromValues(gameType, numbers);
+}
+
+function buildCostRowFromValues(gameType, values) {
+  return {
+    gameType,
+    star2Cost: values[0],
+    star3Cost: values[1],
+    star4Cost: values[2],
+    carCost: values[3],
+  };
+}
+
+function formatCostValues(values) {
+  return values.join(",");
+}
+
+function buildEditCostPendingAction(friendId, gameIndex, costRows) {
+  return `${PENDING_ACTIONS.EDIT_COST_PREFIX}${friendId}:${gameIndex}:${encodeURIComponent(
+    JSON.stringify(costRows)
+  )}`;
+}
+
+function parseEditCostPendingAction(pendingAction) {
+  const payload = pendingAction.slice(PENDING_ACTIONS.EDIT_COST_PREFIX.length);
+  const [friendIdText, gameIndexText, encodedRows = "%5B%5D"] = payload.split(":");
+
+  return {
+    friendId: Number(friendIdText),
+    gameIndex: Number(gameIndexText),
+    costRows: JSON.parse(decodeURIComponent(encodedRows)),
+  };
 }
 
 function parseNumberRows(numberPart) {
@@ -1824,5 +2179,112 @@ async function replyCostActionMenu(replyToken, friend, channelAccessToken) {
         },
       },
     ],
+  });
+}
+
+async function replyCostEditModeMenu(replyToken, friend, channelAccessToken) {
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: `編輯成本：${friend.name}`,
+    title: `${friend.name} 編輯成本`,
+    description: "可以直接套用預設成本，或改用手動輸入逐項設定。",
+    buttons: [
+      {
+        type: "button",
+        style: "primary",
+        color: "#06C755",
+        action: {
+          type: "message",
+          label: "套用預設成本",
+          text: `${INTERNAL_COMMANDS.APPLY_DEFAULT_COST_PREFIX}${friend.name}`,
+        },
+      },
+      {
+        type: "button",
+        style: "secondary",
+        action: {
+          type: "message",
+          label: "手動輸入",
+          text: `${INTERNAL_COMMANDS.MANUAL_EDIT_COST_PREFIX}${friend.name}`,
+        },
+      },
+    ],
+  });
+}
+
+async function replyCostInputPrompt(
+  replyToken,
+  friendName,
+  gameType,
+  channelAccessToken,
+  noticeText = null
+) {
+  const contents = [];
+  const defaultCostText = formatCostValues(DEFAULT_COST_VALUES_BY_GAME[gameType]);
+
+  if (noticeText) {
+    contents.push({
+      type: "text",
+      text: noticeText,
+      size: "sm",
+      color: noticeText.startsWith("成本格式不正確") ? "#D93025" : "#06C755",
+      wrap: true,
+    });
+  }
+
+  contents.push(
+    {
+      type: "text",
+      text: `請輸入 ${friendName} 的成本`,
+      size: "sm",
+      color: "#666666",
+      wrap: true,
+    },
+    {
+      type: "text",
+      text: `「${gameType}」`,
+      weight: "bold",
+      size: "xl",
+      wrap: true,
+    },
+    {
+      type: "text",
+      text: `格式：${defaultCostText}`,
+      size: "md",
+      color: "#111111",
+      wrap: true,
+    },
+    {
+      type: "text",
+      text: "四個數字請用逗號串接，依序代表二星、三星、四星、車組成本。",
+      size: "sm",
+      color: "#666666",
+      wrap: true,
+    }
+  );
+
+  await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${channelAccessToken}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [
+        {
+          type: "flex",
+          altText: `請輸入「${gameType}」成本`,
+          contents: {
+            type: "bubble",
+            body: {
+              type: "box",
+              layout: "vertical",
+              spacing: "md",
+              contents,
+            },
+          },
+        },
+      ],
+    }),
   });
 }
