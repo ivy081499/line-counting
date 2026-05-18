@@ -108,3 +108,30 @@ npm run ai:eval
 
 腳本會逐筆案例呼叫 OpenAI Responses API，並比對輸出的 `normalized` 是否跟正解完全一致。
 
+## 控制 eval 範圍
+
+為了節省 API 費用，可以只跑部分案例。
+
+只跑前 5 筆：
+
+```bash
+AI_EVAL_LIMIT=5 npm run ai:eval
+```
+
+只跑圖片案例：
+
+```bash
+AI_EVAL_TYPE=image npm run ai:eval
+```
+
+只跑指定案例：
+
+```bash
+AI_EVAL_CASES=image-584597,image-8245 npm run ai:eval
+```
+
+也可以合併使用，例如只跑前 3 筆圖片案例：
+
+```bash
+AI_EVAL_TYPE=image AI_EVAL_LIMIT=3 npm run ai:eval
+```
