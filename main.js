@@ -2497,10 +2497,7 @@ async function handlePendingAddFriend(event, env, userId, text) {
   if (existingFriend) {
     await replyMessage(
       event.replyToken,
-      [
-        `朋友已存在：${existingFriend.name}`,
-        "可繼續輸入下一位朋友名稱，不會影響目前來源。"
-      ].join("\n"),
+      `朋友已存在：${existingFriend.name}`,
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
