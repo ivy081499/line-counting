@@ -5,6 +5,7 @@ export const COMMANDS = {
   FRIEND_LIST: "查看朋友列表",
   TODAY_ORDERS: "今日注單",
   PAST_ORDERS: "過往注單",
+  EDIT_ORDER: "修改注單",
   FRIEND_MANAGEMENT: "朋友管理",
   COST_MANAGEMENT: "成本管理",
   HELP: "說明",
@@ -17,6 +18,9 @@ export const INTERNAL_COMMANDS = {
   CANCEL_DELETE_FRIEND: "!取消刪除朋友",
   ORDER_REPORT_PREFIX: "!注單報表:",
   PAST_ORDER_DATE_PREFIX: "!過往注單日期:",
+  EDIT_ORDER_DATE_PREFIX: "!修改注單日期:",
+  EDIT_ORDER_FRIEND_PREFIX: "!修改注單朋友:",
+  EDIT_ORDER_MESSAGE_PREFIX: "!修改注單內容:",
   COST_MANAGEMENT_PREFIX: "!成本管理:",
   VIEW_COST_PREFIX: "!查看成本:",
   EDIT_COST_PREFIX: "!編輯成本:",
@@ -27,6 +31,8 @@ export const INTERNAL_COMMANDS = {
 export const PENDING_ACTIONS = {
   ADD_FRIEND: "add_friend",
   PAST_ORDER_DATE: "past_order_date",
+  EDIT_ORDER_DATE: "edit_order_date",
+  EDIT_ORDER_TEXT_PREFIX: "edit_order_text:",
   EDIT_COST_PREFIX: "edit_cost:",
 };
 
