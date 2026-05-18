@@ -13,6 +13,7 @@ import {
   buildCostReport,
   buildDailyTotalReport,
   calculateEntryBetAmount,
+  calculateEntryPrizeAmount,
 } from './reports.js';
 import {
   getTaipeiDateString,
@@ -736,12 +737,14 @@ async function handlePendingEditOrderText(event, env, userId, text, session) {
     rawMessage.taipei_date
   );
   const { costs } = await getOrCreateFriendCosts(env.DB, rawMessage.friend_id);
+  const winningNumbersByGameType = await getWinningNumbersByDate(env, rawMessage.taipei_date);
   const report = buildCalculationReport(
     rawMessage.friend_name,
     entries,
     imageCount,
     rawMessage.taipei_date,
-    costs
+    costs,
+    winningNumbersByGameType
   );
 
   await replyMessage(
@@ -793,12 +796,14 @@ async function handleOrderReportForFriendName(event, env, dateText, friendName) 
   }
 
   const { costs } = await getOrCreateFriendCosts(env.DB, friend.id);
+  const winningNumbersByGameType = await getWinningNumbersByDate(env, dateText);
   const report = buildCalculationReport(
     friend.name,
     entries,
     imageCount,
     dateText,
-    costs
+    costs,
+    winningNumbersByGameType
   );
 
   await replyMessage(event.replyToken, report, env.LINE_CHANNEL_ACCESS_TOKEN);
@@ -1179,6 +1184,7 @@ async function handleDailyReportForDate(event, env, dateText) {
   }
 
   const friends = await getFriendsWithOrdersByDate(env.DB, dateText);
+  const winningNumbersByGameType = await getWinningNumbersByDate(env, dateText);
   const summaries = [];
 
   for (const friend of friends) {
@@ -1188,14 +1194,21 @@ async function handleDailyReportForDate(event, env, dateText) {
       dateText
     );
     const { costs } = await getOrCreateFriendCosts(env.DB, friend.id);
-    const betAmount = entries
-      .filter((entry) => !entry.errorMessage)
-      .reduce((total, entry) => total + calculateEntryBetAmount(entry, costs), 0);
+    const parsedEntries = entries.filter((entry) => !entry.errorMessage);
+    const betAmount = parsedEntries.reduce(
+      (total, entry) => total + calculateEntryBetAmount(entry, costs),
+      0
+    );
+    const prizeAmount = parsedEntries.reduce(
+      (total, entry) =>
+        total + calculateEntryPrizeAmount(entry, costs, winningNumbersByGameType),
+      0
+    );
 
     summaries.push({
       friendName: friend.name,
       betAmount,
-      prizeAmount: 0,
+      prizeAmount,
     });
   }
 
@@ -1204,6 +1217,17 @@ async function handleDailyReportForDate(event, env, dateText) {
     buildDailyTotalReport(dateText, summaries),
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
+}
+
+async function getWinningNumbersByDate(env, dateText) {
+  const entries = await Promise.all(
+    COST_GAME_TYPES.map(async (gameType) => {
+      const winningNumber = await getWinningNumber(env.DB, gameType, dateText);
+      return [gameType, winningNumber?.numbers || []];
+    })
+  );
+
+  return Object.fromEntries(entries);
 }
 
 async function handleHelpCommand(event, env) {

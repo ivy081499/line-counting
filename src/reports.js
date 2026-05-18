@@ -10,7 +10,8 @@ export function buildCalculationReport(
   entries,
   imageCount = 0,
   dateText = getTaipeiDateString(),
-  costs = []
+  costs = [],
+  winningNumbersByGameType = {}
 ) {
   const totals = { 2: 0, 3: 0, 4: 0, car: 0 };
   const betAmounts = { 2: 0, 3: 0, 4: 0, car: 0 };
@@ -36,6 +37,12 @@ export function buildCalculationReport(
           entry.gameType,
           calculation,
           costByGameType
+        );
+        prizeAmounts[calculation.pick] += calculatePrizeAmount(
+          entry,
+          calculation,
+          costByGameType,
+          winningNumbersByGameType
         );
       }
 
@@ -161,6 +168,26 @@ export function calculateEntryBetAmount(entry, costs) {
   );
 }
 
+export function calculateEntryPrizeAmount(
+  entry,
+  costs,
+  winningNumbersByGameType
+) {
+  const costByGameType = buildCostByGameType(costs);
+
+  return entry.calculations.reduce(
+    (total, calculation) =>
+      total +
+      calculatePrizeAmount(
+        entry,
+        calculation,
+        costByGameType,
+        winningNumbersByGameType
+      ),
+    0
+  );
+}
+
 function buildCostByGameType(costs) {
   return Object.fromEntries(costs.map((cost) => [cost.game_type, cost]));
 }
@@ -177,6 +204,75 @@ function calculateBetAmount(gameType, calculation, costByGameType) {
   };
 
   return calculation.amount * (unitCostByPick[calculation.pick] || 0);
+}
+
+function calculatePrizeAmount(
+  entry,
+  calculation,
+  costByGameType,
+  winningNumbersByGameType
+) {
+  const cost = costByGameType[entry.gameType];
+  const winningNumbers = winningNumbersByGameType[entry.gameType];
+
+  if (!cost || !winningNumbers?.length) return 0;
+
+  const unitPrizeByPick = {
+    2: cost.star2_prize,
+    3: cost.star3_prize,
+    4: cost.star4_prize,
+    car: cost.star2_prize,
+  };
+  const unitPrize = unitPrizeByPick[calculation.pick] || 0;
+  if (!unitPrize) return 0;
+
+  const winningCount = calculateWinningCount(
+    entry.rows,
+    calculation,
+    winningNumbers
+  );
+
+  return winningCount * unitPrize;
+}
+
+function calculateWinningCount(rows, calculation, winningNumbers) {
+  const winningSet = new Set(winningNumbers);
+
+  if (calculation.pick === "car") {
+    const targetNumber = rows[0]?.[0];
+    if (!targetNumber || !winningSet.has(targetNumber)) return 0;
+
+    const otherWinningCount = (rows[1] || []).filter((number) =>
+      winningSet.has(number)
+    ).length;
+
+    return otherWinningCount * calculation.multiplier;
+  }
+
+  const pick = Number(calculation.pick);
+  if (!Number.isInteger(pick) || pick <= 0 || pick > rows.length) return 0;
+
+  let total = 0;
+
+  function visit(startIndex, pickedCount, product) {
+    if (pickedCount === pick) {
+      total += product;
+      return;
+    }
+
+    for (let index = startIndex; index < rows.length; index += 1) {
+      const matchCount = rows[index].filter((number) =>
+        winningSet.has(number)
+      ).length;
+
+      if (matchCount > 0) {
+        visit(index + 1, pickedCount + 1, product * matchCount);
+      }
+    }
+  }
+
+  visit(0, 0, 1);
+  return total * calculation.multiplier;
 }
 
 function formatEntryGameType(entry) {

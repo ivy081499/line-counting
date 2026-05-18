@@ -390,7 +390,7 @@ function parseWinningNumbersText(text) {
 }
 
 // src/reports.js
-function buildCalculationReport(friendName, entries, imageCount = 0, dateText = getTaipeiDateString(), costs = []) {
+function buildCalculationReport(friendName, entries, imageCount = 0, dateText = getTaipeiDateString(), costs = [], winningNumbersByGameType = {}) {
   const totals = { 2: 0, 3: 0, 4: 0, car: 0 };
   const betAmounts = { 2: 0, 3: 0, 4: 0, car: 0 };
   const prizeAmounts = { 2: 0, 3: 0, 4: 0, car: 0 };
@@ -412,6 +412,12 @@ function buildCalculationReport(friendName, entries, imageCount = 0, dateText = 
           entry.gameType,
           calculation,
           costByGameType
+        );
+        prizeAmounts[calculation.pick] += calculatePrizeAmount(
+          entry,
+          calculation,
+          costByGameType,
+          winningNumbersByGameType
         );
       }
       return `${formatPickLabel(calculation.pick)}${formatNumber(
@@ -515,6 +521,18 @@ function calculateEntryBetAmount(entry, costs) {
     0
   );
 }
+function calculateEntryPrizeAmount(entry, costs, winningNumbersByGameType) {
+  const costByGameType = buildCostByGameType(costs);
+  return entry.calculations.reduce(
+    (total, calculation) => total + calculatePrizeAmount(
+      entry,
+      calculation,
+      costByGameType,
+      winningNumbersByGameType
+    ),
+    0
+  );
+}
 function buildCostByGameType(costs) {
   return Object.fromEntries(costs.map((cost) => [cost.game_type, cost]));
 }
@@ -528,6 +546,55 @@ function calculateBetAmount(gameType, calculation, costByGameType) {
     car: cost.car_cost
   };
   return calculation.amount * (unitCostByPick[calculation.pick] || 0);
+}
+function calculatePrizeAmount(entry, calculation, costByGameType, winningNumbersByGameType) {
+  const cost = costByGameType[entry.gameType];
+  const winningNumbers = winningNumbersByGameType[entry.gameType];
+  if (!cost || !winningNumbers?.length) return 0;
+  const unitPrizeByPick = {
+    2: cost.star2_prize,
+    3: cost.star3_prize,
+    4: cost.star4_prize,
+    car: cost.star2_prize
+  };
+  const unitPrize = unitPrizeByPick[calculation.pick] || 0;
+  if (!unitPrize) return 0;
+  const winningCount = calculateWinningCount(
+    entry.rows,
+    calculation,
+    winningNumbers
+  );
+  return winningCount * unitPrize;
+}
+function calculateWinningCount(rows, calculation, winningNumbers) {
+  const winningSet = new Set(winningNumbers);
+  if (calculation.pick === "car") {
+    const targetNumber = rows[0]?.[0];
+    if (!targetNumber || !winningSet.has(targetNumber)) return 0;
+    const otherWinningCount = (rows[1] || []).filter(
+      (number) => winningSet.has(number)
+    ).length;
+    return otherWinningCount * calculation.multiplier;
+  }
+  const pick = Number(calculation.pick);
+  if (!Number.isInteger(pick) || pick <= 0 || pick > rows.length) return 0;
+  let total = 0;
+  function visit(startIndex, pickedCount, product) {
+    if (pickedCount === pick) {
+      total += product;
+      return;
+    }
+    for (let index = startIndex; index < rows.length; index += 1) {
+      const matchCount = rows[index].filter(
+        (number) => winningSet.has(number)
+      ).length;
+      if (matchCount > 0) {
+        visit(index + 1, pickedCount + 1, product * matchCount);
+      }
+    }
+  }
+  visit(0, 0, 1);
+  return total * calculation.multiplier;
 }
 function formatEntryGameType(entry) {
   return entry.gameType ? `[${entry.gameType}] ` : "";
@@ -2743,12 +2810,14 @@ async function handlePendingEditOrderText(event, env, userId, text, session) {
     rawMessage.taipei_date
   );
   const { costs } = await getOrCreateFriendCosts(env.DB, rawMessage.friend_id);
+  const winningNumbersByGameType = await getWinningNumbersByDate(env, rawMessage.taipei_date);
   const report = buildCalculationReport(
     rawMessage.friend_name,
     entries,
     imageCount,
     rawMessage.taipei_date,
-    costs
+    costs,
+    winningNumbersByGameType
   );
   await replyMessage(
     event.replyToken,
@@ -2794,12 +2863,14 @@ async function handleOrderReportForFriendName(event, env, dateText, friendName) 
     return;
   }
   const { costs } = await getOrCreateFriendCosts(env.DB, friend.id);
+  const winningNumbersByGameType = await getWinningNumbersByDate(env, dateText);
   const report = buildCalculationReport(
     friend.name,
     entries,
     imageCount,
     dateText,
-    costs
+    costs,
+    winningNumbersByGameType
   );
   await replyMessage(event.replyToken, report, env.LINE_CHANNEL_ACCESS_TOKEN);
 }
@@ -3127,6 +3198,7 @@ async function handleDailyReportForDate(event, env, dateText) {
     return;
   }
   const friends = await getFriendsWithOrdersByDate(env.DB, dateText);
+  const winningNumbersByGameType = await getWinningNumbersByDate(env, dateText);
   const summaries = [];
   for (const friend of friends) {
     const entries = await getParsedEntriesByFriendAndDate(
@@ -3135,11 +3207,19 @@ async function handleDailyReportForDate(event, env, dateText) {
       dateText
     );
     const { costs } = await getOrCreateFriendCosts(env.DB, friend.id);
-    const betAmount = entries.filter((entry) => !entry.errorMessage).reduce((total, entry) => total + calculateEntryBetAmount(entry, costs), 0);
+    const parsedEntries = entries.filter((entry) => !entry.errorMessage);
+    const betAmount = parsedEntries.reduce(
+      (total, entry) => total + calculateEntryBetAmount(entry, costs),
+      0
+    );
+    const prizeAmount = parsedEntries.reduce(
+      (total, entry) => total + calculateEntryPrizeAmount(entry, costs, winningNumbersByGameType),
+      0
+    );
     summaries.push({
       friendName: friend.name,
       betAmount,
-      prizeAmount: 0
+      prizeAmount
     });
   }
   await replyMessage(
@@ -3147,6 +3227,15 @@ async function handleDailyReportForDate(event, env, dateText) {
     buildDailyTotalReport(dateText, summaries),
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
+}
+async function getWinningNumbersByDate(env, dateText) {
+  const entries = await Promise.all(
+    COST_GAME_TYPES.map(async (gameType) => {
+      const winningNumber = await getWinningNumber(env.DB, gameType, dateText);
+      return [gameType, winningNumber?.numbers || []];
+    })
+  );
+  return Object.fromEntries(entries);
 }
 async function handleHelpCommand(event, env) {
   await replyMessage(
