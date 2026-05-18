@@ -607,9 +607,9 @@ export async function replyCostManagementFriendPicker(
   }));
 
   await replyButtonMenu(replyToken, channelAccessToken, {
-    altText: "請選擇成本管理朋友",
-    title: "成本管理",
-    description: "請先選擇朋友，再查看或編輯成本設定。",
+    altText: "請選擇成本與獎金管理朋友",
+    title: "成本與獎金",
+    description: "請先選擇朋友，再查看或編輯成本與獎金設定。",
     buttons,
   });
 }
@@ -863,7 +863,7 @@ export async function replyWinningNumberGamePicker(
   await replyButtonMenu(replyToken, channelAccessToken, {
     altText: `請選擇 ${dateText} 開獎彩種`,
     title: `${dateText} 開獎號碼`,
-    description: "請選擇要新增、查看、編輯或刪除開獎號碼的彩種。",
+    description: "請選擇要新增、查看或編輯開獎號碼的彩種。",
     buttons,
   });
 }

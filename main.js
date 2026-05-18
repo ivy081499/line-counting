@@ -1912,9 +1912,9 @@ async function replyCostManagementFriendPicker(replyToken, friends, channelAcces
     }
   }));
   await replyButtonMenu(replyToken, channelAccessToken, {
-    altText: "請選擇成本管理朋友",
-    title: "成本管理",
-    description: "請先選擇朋友，再查看或編輯成本設定。",
+    altText: "請選擇成本與獎金管理朋友",
+    title: "成本與獎金",
+    description: "請先選擇朋友，再查看或編輯成本與獎金設定。",
     buttons
   });
 }
@@ -2142,7 +2142,7 @@ async function replyWinningNumberGamePicker(replyToken, dateText, channelAccessT
   await replyButtonMenu(replyToken, channelAccessToken, {
     altText: `請選擇 ${dateText} 開獎彩種`,
     title: `${dateText} 開獎號碼`,
-    description: "請選擇要新增、查看、編輯或刪除開獎號碼的彩種。",
+    description: "請選擇要新增、查看或編輯開獎號碼的彩種。",
     buttons
   });
 }
@@ -3155,8 +3155,9 @@ async function handleHelpCommand(event, env) {
       "使用方式：",
       "1. 點「選朋友下單」",
       "2. 選擇要記錄注單的朋友",
-      "3. 傳入這位朋友的文字或圖片注單",
-      "4. 點「今日注單」查看今天的注單與支數統計",
+      "3. 選擇彩種",
+      "4. 傳入這位朋友的文字或圖片注單",
+      "5. 點「今日注單」查看今天的注單與支數統計",
       "",
       "過往注單：",
       "可選昨天、前天或輸入特定日期，再選朋友查看。",
