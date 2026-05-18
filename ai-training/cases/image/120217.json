@@ -1,0 +1,16 @@
+{
+  "id": "image-120217",
+  "type": "image",
+  "image": {
+    "path": "../../images/120217.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "101120213031 二x0.3 三x0.3",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

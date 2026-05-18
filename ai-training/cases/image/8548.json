@@ -1,0 +1,21 @@
+{
+  "id": "image-8548",
+  "type": "image",
+  "image": {
+    "path": "../../images/8548.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "061626x091929x102030 二x0.1 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "2131x1222x0414x0515 二x0.1 三x0.1 四x0.1",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

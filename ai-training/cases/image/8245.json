@@ -1,0 +1,21 @@
+{
+  "id": "image-8245",
+  "type": "image",
+  "image": {
+    "path": "../../images/8245.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "152721x102030 二x0.5",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "152127x102030x142434 二x0.1 三x0.1",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

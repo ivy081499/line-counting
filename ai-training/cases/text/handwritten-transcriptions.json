@@ -1,0 +1,93 @@
+{
+  "id": "text-handwritten-transcriptions",
+  "type": "text",
+  "input": "072737x122232 二x4\n08x24x2131x0727 二x1 三x2 四x2\n0824x0727x3237x2131 三x1 四x1\n07172125 二x2 三x2 四x2\n0206112226 二x1 三x1 四x1\n07x1車\n27x1車\n08x1車\n32x1車\n\n152721x102030 二x0.5\n152127x102030x142434 二x0.1 三x0.1\n\n101120213031 二x0.3 三x0.3\n\n1819212934 二三四x1\n11152027 二三四x1\n09132224 二三四x1\n05071437 二三四x1\n06152232 二三四x1",
+  "lines": [
+    {
+      "original": "072737x122232 二x4",
+      "normalized": "072737x122232 二x4",
+      "confidence": 0.99
+    },
+    {
+      "original": "08x24x2131x0727 二x1 三x2 四x2",
+      "normalized": "08x24x2131x0727 二x1 三x2 四x2",
+      "confidence": 0.99
+    },
+    {
+      "original": "0824x0727x3237x2131 三x1 四x1",
+      "normalized": "0824x0727x3237x2131 三x1 四x1",
+      "confidence": 0.99
+    },
+    {
+      "original": "07172125 二x2 三x2 四x2",
+      "normalized": "07172125 二x2 三x2 四x2",
+      "confidence": 0.99
+    },
+    {
+      "original": "0206112226 二x1 三x1 四x1",
+      "normalized": "0206112226 二x1 三x1 四x1",
+      "confidence": 0.99
+    },
+    {
+      "original": "07x1車",
+      "normalized": "07x1車",
+      "confidence": 0.99
+    },
+    {
+      "original": "27x1車",
+      "normalized": "27x1車",
+      "confidence": 0.99
+    },
+    {
+      "original": "08x1車",
+      "normalized": "08x1車",
+      "confidence": 0.99
+    },
+    {
+      "original": "32x1車",
+      "normalized": "32x1車",
+      "confidence": 0.99
+    },
+    {
+      "original": "152721x102030 二x0.5",
+      "normalized": "152721x102030 二x0.5",
+      "confidence": 0.99
+    },
+    {
+      "original": "152127x102030x142434 二x0.1 三x0.1",
+      "normalized": "152127x102030x142434 二x0.1 三x0.1",
+      "confidence": 0.99
+    },
+    {
+      "original": "101120213031 二x0.3 三x0.3",
+      "normalized": "101120213031 二x0.3 三x0.3",
+      "confidence": 0.99
+    },
+    {
+      "original": "1819212934 二三四x1",
+      "normalized": "1819212934 二x1 三x1 四x1",
+      "confidence": 0.99
+    },
+    {
+      "original": "11152027 二三四x1",
+      "normalized": "11152027 二x1 三x1 四x1",
+      "confidence": 0.99
+    },
+    {
+      "original": "09132224 二三四x1",
+      "normalized": "09132224 二x1 三x1 四x1",
+      "confidence": 0.99
+    },
+    {
+      "original": "05071437 二三四x1",
+      "normalized": "05071437 二x1 三x1 四x1",
+      "confidence": 0.99
+    },
+    {
+      "original": "06152232 二三四x1",
+      "normalized": "06152232 二x1 三x1 四x1",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

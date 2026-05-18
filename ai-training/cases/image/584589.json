@@ -1,0 +1,41 @@
+{
+  "id": "image-584589",
+  "type": "image",
+  "image": {
+    "path": "../../images/584589.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "08373920x18272912x28073502x38261922x15250932 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "08182838x09193926x05152535x07172737x02122232 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "05152535x0102030406070809101112131416171819202122232426272829303132333436373839 二x0.3",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "09252807370115 二x0.1 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0919x1525x0828x0737x2202x0424 三x0.05 四x0.02",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "072737x05152535 二x1",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}
