@@ -112,6 +112,22 @@ export async function ensureDatabaseSchema(db) {
       `
     )
     .run();
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS raw_message_revisions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        raw_message_id INTEGER NOT NULL,
+        old_raw_text TEXT,
+        new_raw_text TEXT NOT NULL,
+        line_user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (raw_message_id) REFERENCES raw_messages(id)
+      )
+      `
+    )
+    .run();
 }
 
 async function ensureColumn(db, tableName, columnName, columnDefinition) {
@@ -405,7 +421,7 @@ export async function saveRawMessage(db, message) {
 }
 
 export async function saveParsedEntriesForText(db, message) {
-  if (!message.rawMessageId) return;
+  if (!message.rawMessageId) return [];
 
   const entries = parseTextToCalculationEntries(message.rawText);
 
@@ -423,9 +439,10 @@ export async function saveParsedEntriesForText(db, message) {
           rows_json,
           calculations_json,
           total_amount,
-          error_message
+          error_message,
+          created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
         `
       )
       .bind(
@@ -438,7 +455,8 @@ export async function saveParsedEntriesForText(db, message) {
         JSON.stringify(entry.rows),
         JSON.stringify(entry.calculations),
         entry.totalAmount,
-        entry.errorMessage
+        entry.errorMessage,
+        message.createdAt || null
       )
       .run();
   }
@@ -515,6 +533,96 @@ export async function getParsedEntriesByFriendAndDate(db, friendId, dateText) {
     .all();
 
   return (result.results || []).map(normalizeParsedEntryFromDb);
+}
+
+export async function getRawMessageById(db, rawMessageId) {
+  return await db
+    .prepare(
+      `
+      SELECT
+        raw_messages.id,
+        raw_messages.friend_id,
+        raw_messages.line_user_id,
+        raw_messages.message_type,
+        raw_messages.raw_text,
+        raw_messages.image_message_id,
+        raw_messages.created_at,
+        date(raw_messages.created_at, '+8 hours') AS taipei_date,
+        friends.name AS friend_name
+      FROM raw_messages
+      INNER JOIN friends
+        ON friends.id = raw_messages.friend_id
+       AND friends.deleted_at IS NULL
+      WHERE raw_messages.id = ?
+      `
+    )
+    .bind(rawMessageId)
+    .first();
+}
+
+export async function getEditableRawMessagesByFriendAndDate(db, friendId, dateText) {
+  const result = await db
+    .prepare(
+      `
+      SELECT
+        id,
+        friend_id,
+        line_user_id,
+        raw_text,
+        created_at,
+        date(created_at, '+8 hours') AS taipei_date
+      FROM raw_messages
+      WHERE friend_id = ?
+        AND message_type = 'text'
+        AND raw_text IS NOT NULL
+        AND date(created_at, '+8 hours') = ?
+      ORDER BY created_at ASC, id ASC
+      LIMIT 12
+      `
+    )
+    .bind(friendId, dateText)
+    .all();
+
+  return result.results || [];
+}
+
+export async function updateRawTextMessageWithRevision(
+  db,
+  rawMessage,
+  newRawText,
+  editorLineUserId
+) {
+  await db
+    .prepare(
+      `
+      INSERT INTO raw_message_revisions (
+        raw_message_id,
+        old_raw_text,
+        new_raw_text,
+        line_user_id
+      )
+      VALUES (?, ?, ?, ?)
+      `
+    )
+    .bind(rawMessage.id, rawMessage.raw_text, newRawText, editorLineUserId)
+    .run();
+
+  await db
+    .prepare(
+      `
+      UPDATE raw_messages
+      SET raw_text = ?
+      WHERE id = ?
+        AND message_type = 'text'
+      `
+    )
+    .bind(newRawText, rawMessage.id)
+    .run();
+
+  await db
+    .prepare("DELETE FROM parsed_entries WHERE raw_message_id = ?")
+    .bind(rawMessage.id)
+    .run();
 }
 
 export async function getImageMessageCountByFriendAndDate(db, friendId, dateText) {

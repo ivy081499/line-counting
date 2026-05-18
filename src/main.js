@@ -7,6 +7,7 @@ import {
 } from './aiParser.js';
 import { buildEditCostPendingAction, parseCostCsvLine, parseEditCostPendingAction } from './costs.js';
 import { downloadLineImage } from './lineContent.js';
+import { buildEditOrderPendingAction, parseEditOrderPendingAction } from './orderEdits.js';
 import { buildCalculationReport, buildCostReport } from './reports.js';
 import { getTaipeiDateString, isAllowedUser, isValidDateText, parseDateFriendPayload } from './utils.js';
 import {
@@ -19,16 +20,19 @@ import {
   getFriendByName,
   getFriendCosts,
   getFriends,
+  getEditableRawMessagesByFriendAndDate,
   getFriendsWithOrdersByDate,
   getImageMessageCountByFriendAndDate,
   getOrCreateFriendCosts,
   getParsedEntriesByFriendAndDate,
+  getRawMessageById,
   saveFriendCosts,
   saveAIParseResult,
   saveParsedEntriesForText,
   saveRawMessage,
   setCurrentFriend,
   setPendingAction,
+  updateRawTextMessageWithRevision,
 } from './db.js';
 import {
   replyCostActionMenu,
@@ -37,6 +41,10 @@ import {
   replyCostManagementFriendPicker,
   replyDeleteFriendConfirmation,
   replyDeleteFriendPicker,
+  replyEditOrderDateMenu,
+  replyEditOrderFriendPicker,
+  replyEditOrderInputPrompt,
+  replyEditOrderMessagePicker,
   replyFriendManagementMenu,
   replyFriendPicker,
   replyMessage,
@@ -127,6 +135,16 @@ async function handleTextMessage(event, env, userId) {
     return;
   }
 
+  if (session?.pending_action === PENDING_ACTIONS.EDIT_ORDER_DATE) {
+    await handlePendingEditOrderDate(event, env, userId, text);
+    return;
+  }
+
+  if (session?.pending_action?.startsWith(PENDING_ACTIONS.EDIT_ORDER_TEXT_PREFIX)) {
+    await handlePendingEditOrderText(event, env, userId, text, session);
+    return;
+  }
+
   if (session?.pending_action?.startsWith(PENDING_ACTIONS.EDIT_COST_PREFIX)) {
     await handlePendingEditCost(event, env, userId, text, session);
     return;
@@ -178,6 +196,32 @@ async function handleInternalTextCommand(event, env, userId, text, session) {
       .trim();
     await clearPendingActionIfNeeded(env.DB, userId, session);
     await handlePastOrderDateSelected(event, env, dateText);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.EDIT_ORDER_DATE_PREFIX)) {
+    const dateText = text
+      .slice(INTERNAL_COMMANDS.EDIT_ORDER_DATE_PREFIX.length)
+      .trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleEditOrderDateSelected(event, env, dateText);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.EDIT_ORDER_FRIEND_PREFIX)) {
+    const payload = text.slice(INTERNAL_COMMANDS.EDIT_ORDER_FRIEND_PREFIX.length);
+    const { dateText, friendName } = parseDateFriendPayload(payload);
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleEditOrderForFriendName(event, env, dateText, friendName);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.EDIT_ORDER_MESSAGE_PREFIX)) {
+    const rawMessageId = Number(
+      text.slice(INTERNAL_COMMANDS.EDIT_ORDER_MESSAGE_PREFIX.length).trim()
+    );
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleEditOrderMessageSelected(event, env, userId, rawMessageId);
     return true;
   }
 
@@ -249,6 +293,12 @@ async function handleRichMenuCommand(event, env, userId, text, session) {
   if (text === COMMANDS.PAST_ORDERS) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
     await handlePastOrdersCommand(event, env);
+    return true;
+  }
+
+  if (text === COMMANDS.EDIT_ORDER) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleEditOrderCommand(event, env);
     return true;
   }
 
@@ -405,6 +455,187 @@ async function handlePendingPastOrderDate(event, env, userId, text) {
 
   await clearPendingAction(env.DB, userId);
   await handleOrderReportDateCommand(event, env, dateText);
+}
+
+async function handleEditOrderCommand(event, env) {
+  await replyEditOrderDateMenu(event.replyToken, env.LINE_CHANNEL_ACCESS_TOKEN);
+}
+
+async function handleEditOrderDateSelected(event, env, dateText) {
+  if (dateText === "指定日期") {
+    await setPendingAction(env.DB, event.source.userId, PENDING_ACTIONS.EDIT_ORDER_DATE);
+    await replyMessage(
+      event.replyToken,
+      "請輸入要修改注單的日期，格式 yyyy-MM-dd，例如 2026-05-16。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await handleEditOrderDateCommand(event, env, dateText);
+}
+
+async function handlePendingEditOrderDate(event, env, userId, text) {
+  const dateText = text.trim();
+  if (!isValidDateText(dateText)) {
+    await replyMessage(
+      event.replyToken,
+      "日期格式不正確，請輸入 yyyy-MM-dd，例如 2026-05-16。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await clearPendingAction(env.DB, userId);
+  await handleEditOrderDateCommand(event, env, dateText);
+}
+
+async function handleEditOrderDateCommand(event, env, dateText) {
+  if (!isValidDateText(dateText)) {
+    await replyMessage(
+      event.replyToken,
+      "日期格式不正確。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const friends = await getFriendsWithOrdersByDate(env.DB, dateText);
+  await replyEditOrderFriendPicker(
+    event.replyToken,
+    friends,
+    dateText,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleEditOrderForFriendName(event, env, dateText, friendName) {
+  if (!isValidDateText(dateText)) {
+    await replyMessage(
+      event.replyToken,
+      "日期格式不正確。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const friend = await getFriendByName(env.DB, friendName);
+  if (!friend) {
+    await replyMessage(
+      event.replyToken,
+      `找不到朋友：${friendName}。`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const rawMessages = await getEditableRawMessagesByFriendAndDate(
+    env.DB,
+    friend.id,
+    dateText
+  );
+
+  await replyEditOrderMessagePicker(
+    event.replyToken,
+    friend,
+    dateText,
+    rawMessages,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleEditOrderMessageSelected(event, env, userId, rawMessageId) {
+  if (!Number.isInteger(rawMessageId) || rawMessageId <= 0) {
+    await replyMessage(
+      event.replyToken,
+      "找不到要修改的注單。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const rawMessage = await getRawMessageById(env.DB, rawMessageId);
+  if (!rawMessage || rawMessage.message_type !== "text") {
+    await replyMessage(
+      event.replyToken,
+      "找不到可修改的文字注單。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await setPendingAction(env.DB, userId, buildEditOrderPendingAction(rawMessage.id));
+  await replyEditOrderInputPrompt(
+    event.replyToken,
+    rawMessage,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handlePendingEditOrderText(event, env, userId, text, session) {
+  const { rawMessageId } = parseEditOrderPendingAction(session.pending_action);
+  const rawMessage = await getRawMessageById(env.DB, rawMessageId);
+
+  if (!rawMessage || rawMessage.message_type !== "text") {
+    await clearPendingAction(env.DB, userId);
+    await replyMessage(
+      event.replyToken,
+      "找不到要修改的文字注單，已取消修改模式。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const newRawText = text.trim();
+  if (!newRawText) {
+    await replyMessage(
+      event.replyToken,
+      "新注單內容不能是空白，請重新輸入。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await updateRawTextMessageWithRevision(env.DB, rawMessage, newRawText, userId);
+
+  const parseResult = await parseAndSaveOrderText(env, {
+    rawMessageId: rawMessage.id,
+    friendId: rawMessage.friend_id,
+    lineUserId: userId,
+    inputType: "text",
+    rawText: newRawText,
+    createdAt: rawMessage.created_at,
+  });
+
+  await clearPendingAction(env.DB, userId);
+
+  const entries = await getParsedEntriesByFriendAndDate(
+    env.DB,
+    rawMessage.friend_id,
+    rawMessage.taipei_date
+  );
+  const imageCount = await getImageMessageCountByFriendAndDate(
+    env.DB,
+    rawMessage.friend_id,
+    rawMessage.taipei_date
+  );
+  const report = buildCalculationReport(
+    rawMessage.friend_name,
+    entries,
+    imageCount,
+    rawMessage.taipei_date
+  );
+
+  await replyMessage(
+    event.replyToken,
+    [
+      `已修改 ${rawMessage.friend_name} 的注單。`,
+      buildOrderReceivedMessage(rawMessage.friend_name, parseResult),
+      "",
+      report,
+    ].join("\n"),
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
 }
 
 async function handleOrderReportForFriendName(event, env, dateText, friendName) {
@@ -646,6 +877,7 @@ async function handleHelpCommand(event, env) {
       "",
       "過往注單：",
       "可選昨天、前天或輸入特定日期，再選朋友查看。",
+      "要修改注單時，點「過往注單」裡的「修改注單」，選日期、朋友與原始文字注單後，再輸入新的內容。",
       "",
       "朋友管理：",
       "可新增朋友或刪除朋友。",
@@ -711,10 +943,7 @@ async function handlePendingAddFriend(event, env, userId, text) {
   if (existingFriend) {
     await replyMessage(
       event.replyToken,
-      [
-        `朋友已存在：${existingFriend.name}`,
-        "可繼續輸入下一位朋友名稱，不會影響目前來源。",
-      ].join("\n"),
+      `朋友已存在：${existingFriend.name}`,
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;
@@ -795,6 +1024,24 @@ async function handleImageMessage(event, env, userId) {
     await replyMessage(
       event.replyToken,
       "請輸入文字作為朋友名稱，不要傳圖片。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  if (session?.pending_action === PENDING_ACTIONS.EDIT_ORDER_DATE) {
+    await replyMessage(
+      event.replyToken,
+      "請輸入文字日期，格式 yyyy-MM-dd，不要傳圖片。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  if (session?.pending_action?.startsWith(PENDING_ACTIONS.EDIT_ORDER_TEXT_PREFIX)) {
+    await replyMessage(
+      event.replyToken,
+      "請輸入新的文字注單內容，不要傳圖片。",
       env.LINE_CHANNEL_ACCESS_TOKEN
     );
     return;

@@ -367,8 +367,156 @@ export async function replyPastOrdersMenu(replyToken, channelAccessToken) {
           text: `${INTERNAL_COMMANDS.PAST_ORDER_DATE_PREFIX}指定日期`,
         },
       },
+      {
+        type: "button",
+        style: "secondary",
+        action: {
+          type: "message",
+          label: "修改注單",
+          text: COMMANDS.EDIT_ORDER,
+        },
+      },
     ],
   });
+}
+
+export async function replyEditOrderDateMenu(replyToken, channelAccessToken) {
+  const today = addDaysToTaipeiDate(0);
+  const yesterday = addDaysToTaipeiDate(-1);
+  const dayBeforeYesterday = addDaysToTaipeiDate(-2);
+
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: "修改注單",
+    title: "修改注單",
+    description: "請先選擇日期，再選擇朋友與要修改的文字注單。",
+    buttons: [
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: `今天 ${today}`,
+          text: `${INTERNAL_COMMANDS.EDIT_ORDER_DATE_PREFIX}${today}`,
+        },
+      },
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: `昨天 ${yesterday}`,
+          text: `${INTERNAL_COMMANDS.EDIT_ORDER_DATE_PREFIX}${yesterday}`,
+        },
+      },
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: `前天 ${dayBeforeYesterday}`,
+          text: `${INTERNAL_COMMANDS.EDIT_ORDER_DATE_PREFIX}${dayBeforeYesterday}`,
+        },
+      },
+      {
+        type: "button",
+        style: "secondary",
+        action: {
+          type: "message",
+          label: "特定日期",
+          text: `${INTERNAL_COMMANDS.EDIT_ORDER_DATE_PREFIX}指定日期`,
+        },
+      },
+    ],
+  });
+}
+
+export async function replyEditOrderFriendPicker(
+  replyToken,
+  friends,
+  dateText,
+  channelAccessToken
+) {
+  if (friends.length === 0) {
+    await replyMessage(
+      replyToken,
+      `${dateText} 沒有任何朋友的注單資料。`,
+      channelAccessToken
+    );
+    return;
+  }
+
+  const buttons = friends.slice(0, 12).map((friend) => ({
+    type: "button",
+    style: "primary",
+    color: "#1A73E8",
+    action: {
+      type: "message",
+      label: friend.name,
+      text: `${INTERNAL_COMMANDS.EDIT_ORDER_FRIEND_PREFIX}${dateText}|${friend.name}`,
+    },
+  }));
+
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: `請選擇 ${dateText} 修改注單朋友`,
+    title: `${dateText} 修改注單`,
+    description: "請選擇朋友，下一步會列出可修改的文字注單。",
+    buttons,
+  });
+}
+
+export async function replyEditOrderMessagePicker(
+  replyToken,
+  friend,
+  dateText,
+  rawMessages,
+  channelAccessToken
+) {
+  if (rawMessages.length === 0) {
+    await replyMessage(
+      replyToken,
+      `${friend.name} ${dateText} 沒有可修改的文字注單。`,
+      channelAccessToken
+    );
+    return;
+  }
+
+  const buttons = rawMessages.slice(0, 12).map((message, index) => ({
+    type: "button",
+    style: "primary",
+    color: "#1A73E8",
+    action: {
+      type: "message",
+      label: `${index + 1}. ${buildRawMessageLabel(message.raw_text, index)}`,
+      text: `${INTERNAL_COMMANDS.EDIT_ORDER_MESSAGE_PREFIX}${message.id}`,
+    },
+  }));
+
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: `請選擇 ${friend.name} 要修改的注單`,
+    title: `${friend.name} ${dateText}`,
+    description: "請選擇要修改的文字注單。每個按鈕代表一則 LINE 文字訊息。",
+    buttons,
+  });
+}
+
+export async function replyEditOrderInputPrompt(
+  replyToken,
+  rawMessage,
+  channelAccessToken
+) {
+  await replyMessage(
+    replyToken,
+    [
+      "請輸入新的注單內容。",
+      "",
+      "原內容：",
+      rawMessage.raw_text || "",
+    ].join("\n"),
+    channelAccessToken
+  );
 }
 
 export async function replyOrderReportFriendPicker(
@@ -436,6 +584,19 @@ export async function replyCostManagementFriendPicker(
     description: "請先選擇朋友，再查看或編輯成本設定。",
     buttons,
   });
+}
+
+function buildRawMessageLabel(rawText, index) {
+  const singleLineText = String(rawText || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const prefixLength = `${index + 1}. `.length;
+  const maxTextLength = Math.max(6, 20 - prefixLength);
+
+  if (!singleLineText) return "空白注單";
+  if (singleLineText.length <= maxTextLength) return singleLineText;
+
+  return `${singleLineText.slice(0, maxTextLength - 3)}...`;
 }
 
 export async function replyCostActionMenu(replyToken, friend, channelAccessToken) {
