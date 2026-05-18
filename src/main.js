@@ -8,8 +8,19 @@ import {
 import { buildEditCostPendingAction, parseCostCsvLine, parseEditCostPendingAction } from './costs.js';
 import { downloadLineImage } from './lineContent.js';
 import { buildEditOrderPendingAction, parseEditOrderPendingAction } from './orderEdits.js';
-import { buildCalculationReport, buildCostReport } from './reports.js';
-import { getTaipeiDateString, isAllowedUser, isValidDateText, parseDateFriendPayload } from './utils.js';
+import {
+  buildCalculationReport,
+  buildCostReport,
+  buildDailyTotalReport,
+  calculateEntryBetAmount,
+} from './reports.js';
+import {
+  getTaipeiDateString,
+  isAllowedUser,
+  isValidDateText,
+  parseDateFriendPayload,
+  parseWinningNumbersText,
+} from './utils.js';
 import {
   clearPendingAction,
   createFriend,
@@ -26,11 +37,14 @@ import {
   getOrCreateFriendCosts,
   getParsedEntriesByFriendAndDate,
   getRawMessageById,
+  getWinningNumber,
   saveFriendCosts,
   saveAIParseResult,
   saveParsedEntriesForText,
   saveRawMessage,
+  saveWinningNumber,
   setCurrentFriend,
+  setCurrentGameType,
   setPendingAction,
   updateRawTextMessageWithRevision,
 } from './db.js';
@@ -38,7 +52,9 @@ import {
   replyCostActionMenu,
   replyCostEditModeMenu,
   replyCostInputPrompt,
+  replyCostManagementMenu,
   replyCostManagementFriendPicker,
+  replyDailyReportDateMenu,
   replyDeleteFriendConfirmation,
   replyDeleteFriendPicker,
   replyEditOrderDateMenu,
@@ -47,9 +63,13 @@ import {
   replyEditOrderMessagePicker,
   replyFriendManagementMenu,
   replyFriendPicker,
+  replyGameTypePicker,
   replyMessage,
   replyOrderReportFriendPicker,
   replyPastOrdersMenu,
+  replyWinningNumberDateMenu,
+  replyWinningNumberGamePicker,
+  replyWinningNumberInputPrompt,
 } from './lineReplies.js';
 
 export default {
@@ -150,6 +170,21 @@ async function handleTextMessage(event, env, userId) {
     return;
   }
 
+  if (session?.pending_action === PENDING_ACTIONS.WINNING_NUMBER_DATE) {
+    await handlePendingWinningNumberDate(event, env, userId, text);
+    return;
+  }
+
+  if (session?.pending_action?.startsWith(PENDING_ACTIONS.WINNING_NUMBER_INPUT_PREFIX)) {
+    await handlePendingWinningNumberInput(event, env, userId, text, session);
+    return;
+  }
+
+  if (session?.pending_action === PENDING_ACTIONS.DAILY_REPORT_DATE) {
+    await handlePendingDailyReportDate(event, env, userId, text);
+    return;
+  }
+
   await handleSaveTextMessage(event, env, userId, text, session);
 }
 
@@ -225,6 +260,13 @@ async function handleInternalTextCommand(event, env, userId, text, session) {
     return true;
   }
 
+  if (text.startsWith(INTERNAL_COMMANDS.SELECT_GAME_PREFIX)) {
+    const gameType = text.slice(INTERNAL_COMMANDS.SELECT_GAME_PREFIX.length).trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleSelectGameType(event, env, userId, gameType);
+    return true;
+  }
+
   if (text.startsWith(INTERNAL_COMMANDS.COST_MANAGEMENT_PREFIX)) {
     const friendName = text
       .slice(INTERNAL_COMMANDS.COST_MANAGEMENT_PREFIX.length)
@@ -263,6 +305,32 @@ async function handleInternalTextCommand(event, env, userId, text, session) {
       .trim();
     await clearPendingActionIfNeeded(env.DB, userId, session);
     await handleManualEditCost(event, env, friendName);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.WINNING_NUMBER_DATE_PREFIX)) {
+    const dateText = text
+      .slice(INTERNAL_COMMANDS.WINNING_NUMBER_DATE_PREFIX.length)
+      .trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleWinningNumberDateSelected(event, env, dateText);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.WINNING_NUMBER_GAME_PREFIX)) {
+    const payload = text.slice(INTERNAL_COMMANDS.WINNING_NUMBER_GAME_PREFIX.length);
+    const { dateText, friendName: gameType } = parseDateFriendPayload(payload);
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleWinningNumberGameSelected(event, env, userId, dateText, gameType);
+    return true;
+  }
+
+  if (text.startsWith(INTERNAL_COMMANDS.DAILY_REPORT_DATE_PREFIX)) {
+    const dateText = text
+      .slice(INTERNAL_COMMANDS.DAILY_REPORT_DATE_PREFIX.length)
+      .trim();
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleDailyReportDateSelected(event, env, dateText);
     return true;
   }
 
@@ -326,6 +394,24 @@ async function handleRichMenuCommand(event, env, userId, text, session) {
     return true;
   }
 
+  if (text === COMMANDS.FRIEND_COST_MANAGEMENT) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleFriendCostManagementCommand(event, env);
+    return true;
+  }
+
+  if (text === COMMANDS.WINNING_NUMBER_MANAGEMENT) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleWinningNumberManagementCommand(event, env);
+    return true;
+  }
+
+  if (text === COMMANDS.DAILY_TOTAL_REPORT) {
+    await clearPendingActionIfNeeded(env.DB, userId, session);
+    await handleDailyReportCommand(event, env);
+    return true;
+  }
+
   if (text === COMMANDS.HELP) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
     await handleHelpCommand(event, env);
@@ -367,9 +453,38 @@ async function handleSelectFriendByName(event, env, userId, friendName) {
 
   await setCurrentFriend(env.DB, userId, friend.id);
 
+  await replyGameTypePicker(
+    event.replyToken,
+    friend,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleSelectGameType(event, env, userId, gameType) {
+  if (!COST_GAME_TYPES.includes(gameType)) {
+    await replyMessage(
+      event.replyToken,
+      `不支援的彩種：${gameType}`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const session = await getCurrentSession(env.DB, userId);
+  if (!session?.friend_id) {
+    await replyMessage(
+      event.replyToken,
+      "請先選擇朋友，再選彩種。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await setCurrentGameType(env.DB, userId, gameType);
+
   await replyMessage(
     event.replyToken,
-    `目前下單朋友已設定為：${friend.name}`,
+    `目前下單設定：${session.friend_name}／${gameType}`,
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -604,6 +719,7 @@ async function handlePendingEditOrderText(event, env, userId, text, session) {
     lineUserId: userId,
     inputType: "text",
     rawText: newRawText,
+    gameType: rawMessage.game_type || "539",
     createdAt: rawMessage.created_at,
   });
 
@@ -619,11 +735,13 @@ async function handlePendingEditOrderText(event, env, userId, text, session) {
     rawMessage.friend_id,
     rawMessage.taipei_date
   );
+  const { costs } = await getOrCreateFriendCosts(env.DB, rawMessage.friend_id);
   const report = buildCalculationReport(
     rawMessage.friend_name,
     entries,
     imageCount,
-    rawMessage.taipei_date
+    rawMessage.taipei_date,
+    costs
   );
 
   await replyMessage(
@@ -674,12 +792,23 @@ async function handleOrderReportForFriendName(event, env, dateText, friendName) 
     return;
   }
 
-  const report = buildCalculationReport(friend.name, entries, imageCount, dateText);
+  const { costs } = await getOrCreateFriendCosts(env.DB, friend.id);
+  const report = buildCalculationReport(
+    friend.name,
+    entries,
+    imageCount,
+    dateText,
+    costs
+  );
 
   await replyMessage(event.replyToken, report, env.LINE_CHANNEL_ACCESS_TOKEN);
 }
 
 async function handleCostManagementCommand(event, env) {
+  await replyCostManagementMenu(event.replyToken, env.LINE_CHANNEL_ACCESS_TOKEN);
+}
+
+async function handleFriendCostManagementCommand(event, env) {
   const friends = await getFriends(env.DB);
   await replyCostManagementFriendPicker(
     event.replyToken,
@@ -723,7 +852,7 @@ async function handleViewCost(event, env, friendName) {
   );
   const message = usedDefaultCosts
     ? [
-        `${friend.name} 尚未設定成本，已自動套用預設成本。`,
+        `${friend.name} 尚未設定成本與獎金，已自動套用預設值。`,
         "",
         buildCostReport(friend.name, costs),
       ].join("\n")
@@ -770,7 +899,7 @@ async function handleApplyDefaultCost(event, env, friendName) {
 
   await replyMessage(
     event.replyToken,
-    [`已套用 ${friend.name} 的預設成本。`, "", buildCostReport(friend.name, costs)].join(
+    [`已套用 ${friend.name} 的預設成本與獎金。`, "", buildCostReport(friend.name, costs)].join(
       "\n"
     ),
     env.LINE_CHANNEL_ACCESS_TOKEN
@@ -827,7 +956,7 @@ async function handlePendingEditCost(event, env, userId, text, session) {
       friend.name,
       gameType,
       env.LINE_CHANNEL_ACCESS_TOKEN,
-      `成本格式不正確：${error.message}`
+      `成本與獎金格式不正確：${error.message}`
     );
     return;
   }
@@ -847,7 +976,7 @@ async function handlePendingEditCost(event, env, userId, text, session) {
       friend.name,
       COST_GAME_TYPES[nextGameIndex],
       env.LINE_CHANNEL_ACCESS_TOKEN,
-      `已暫存「${gameType}」成本。`
+      `已暫存「${gameType}」成本與獎金。`
     );
     return;
   }
@@ -858,9 +987,221 @@ async function handlePendingEditCost(event, env, userId, text, session) {
   const costs = await getFriendCosts(env.DB, friend.id);
   await replyMessage(
     event.replyToken,
-    [`已更新 ${friend.name} 的成本設定。`, "", buildCostReport(friend.name, costs)].join(
+    [`已更新 ${friend.name} 的成本與獎金設定。`, "", buildCostReport(friend.name, costs)].join(
       "\n"
     ),
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleWinningNumberManagementCommand(event, env) {
+  await replyWinningNumberDateMenu(
+    event.replyToken,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleWinningNumberDateSelected(event, env, dateText) {
+  if (dateText === "指定日期") {
+    await setPendingAction(
+      env.DB,
+      event.source.userId,
+      PENDING_ACTIONS.WINNING_NUMBER_DATE
+    );
+    await replyMessage(
+      event.replyToken,
+      "請輸入開獎日期，格式 yyyy-MM-dd，例如 2026-05-19。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await handleWinningNumberDate(event, env, dateText);
+}
+
+async function handlePendingWinningNumberDate(event, env, userId, text) {
+  const dateText = text.trim();
+  if (!isValidDateText(dateText)) {
+    await replyMessage(
+      event.replyToken,
+      "日期格式不正確，請輸入 yyyy-MM-dd，例如 2026-05-19。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await clearPendingAction(env.DB, userId);
+  await handleWinningNumberDate(event, env, dateText);
+}
+
+async function handleWinningNumberDate(event, env, dateText) {
+  if (!isValidDateText(dateText)) {
+    await replyMessage(
+      event.replyToken,
+      "日期格式不正確。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await replyWinningNumberGamePicker(
+    event.replyToken,
+    dateText,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleWinningNumberGameSelected(
+  event,
+  env,
+  userId,
+  dateText,
+  gameType
+) {
+  if (!isValidDateText(dateText)) {
+    await replyMessage(
+      event.replyToken,
+      "日期格式不正確。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  if (!COST_GAME_TYPES.includes(gameType)) {
+    await replyMessage(
+      event.replyToken,
+      `不支援的彩種：${gameType}`,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const winningNumber = await getWinningNumber(env.DB, gameType, dateText);
+  await setPendingAction(
+    env.DB,
+    userId,
+    `${PENDING_ACTIONS.WINNING_NUMBER_INPUT_PREFIX}${dateText}|${gameType}`
+  );
+  await replyWinningNumberInputPrompt(
+    event.replyToken,
+    dateText,
+    gameType,
+    winningNumber,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handlePendingWinningNumberInput(event, env, userId, text, session) {
+  const payload = session.pending_action.slice(
+    PENDING_ACTIONS.WINNING_NUMBER_INPUT_PREFIX.length
+  );
+  const { dateText, friendName: gameType } = parseDateFriendPayload(payload);
+
+  if (!isValidDateText(dateText) || !COST_GAME_TYPES.includes(gameType)) {
+    await clearPendingAction(env.DB, userId);
+    await replyMessage(
+      event.replyToken,
+      "開獎號碼設定狀態不正確，已取消。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  let numbers;
+  try {
+    numbers = parseWinningNumbersText(text);
+  } catch (error) {
+    const winningNumber = await getWinningNumber(env.DB, gameType, dateText);
+    await replyWinningNumberInputPrompt(
+      event.replyToken,
+      dateText,
+      gameType,
+      winningNumber,
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await saveWinningNumber(env.DB, gameType, dateText, numbers);
+  await clearPendingAction(env.DB, userId);
+  await replyMessage(
+    event.replyToken,
+    `已設定 ${dateText} ${gameType} 開獎號碼：${numbers.join(" ")}`,
+    env.LINE_CHANNEL_ACCESS_TOKEN
+  );
+}
+
+async function handleDailyReportCommand(event, env) {
+  await replyDailyReportDateMenu(event.replyToken, env.LINE_CHANNEL_ACCESS_TOKEN);
+}
+
+async function handleDailyReportDateSelected(event, env, dateText) {
+  if (dateText === "指定日期") {
+    await setPendingAction(
+      env.DB,
+      event.source.userId,
+      PENDING_ACTIONS.DAILY_REPORT_DATE
+    );
+    await replyMessage(
+      event.replyToken,
+      "請輸入每日總報表日期，格式 yyyy-MM-dd，例如 2026-05-19。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await handleDailyReportForDate(event, env, dateText);
+}
+
+async function handlePendingDailyReportDate(event, env, userId, text) {
+  const dateText = text.trim();
+  if (!isValidDateText(dateText)) {
+    await replyMessage(
+      event.replyToken,
+      "日期格式不正確，請輸入 yyyy-MM-dd，例如 2026-05-19。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  await clearPendingAction(env.DB, userId);
+  await handleDailyReportForDate(event, env, dateText);
+}
+
+async function handleDailyReportForDate(event, env, dateText) {
+  if (!isValidDateText(dateText)) {
+    await replyMessage(
+      event.replyToken,
+      "日期格式不正確。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
+  const friends = await getFriendsWithOrdersByDate(env.DB, dateText);
+  const summaries = [];
+
+  for (const friend of friends) {
+    const entries = await getParsedEntriesByFriendAndDate(
+      env.DB,
+      friend.id,
+      dateText
+    );
+    const { costs } = await getOrCreateFriendCosts(env.DB, friend.id);
+    const betAmount = entries
+      .filter((entry) => !entry.errorMessage)
+      .reduce((total, entry) => total + calculateEntryBetAmount(entry, costs), 0);
+
+    summaries.push({
+      friendName: friend.name,
+      betAmount,
+      prizeAmount: 0,
+    });
+  }
+
+  await replyMessage(
+    event.replyToken,
+    buildDailyTotalReport(dateText, summaries),
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -898,10 +1239,20 @@ async function handleSaveTextMessage(event, env, userId, text, session) {
     return;
   }
 
+  if (!session?.game_type) {
+    await replyMessage(
+      event.replyToken,
+      "請先選擇彩種，再傳入資料。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
   const rawMessageId = await saveRawMessage(env.DB, {
     friendId: session.friend_id,
     lineUserId: userId,
     messageType: "text",
+    gameType: session.game_type,
     rawText: text,
     imageMessageId: null,
   });
@@ -911,12 +1262,13 @@ async function handleSaveTextMessage(event, env, userId, text, session) {
     friendId: session.friend_id,
     lineUserId: userId,
     inputType: "text",
+    gameType: session.game_type,
     rawText: text,
   });
 
   await replyMessage(
     event.replyToken,
-    buildOrderReceivedMessage(session.friend_name, parseResult),
+    buildOrderReceivedMessage(`${session.friend_name}／${session.game_type}`, parseResult),
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -1047,6 +1399,19 @@ async function handleImageMessage(event, env, userId) {
     return;
   }
 
+  if (
+    session?.pending_action === PENDING_ACTIONS.WINNING_NUMBER_DATE ||
+    session?.pending_action?.startsWith(PENDING_ACTIONS.WINNING_NUMBER_INPUT_PREFIX) ||
+    session?.pending_action === PENDING_ACTIONS.DAILY_REPORT_DATE
+  ) {
+    await replyMessage(
+      event.replyToken,
+      "目前流程需要輸入文字，不要傳圖片。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
   await handleSaveImageMessage(event, env, userId, session);
 }
 
@@ -1060,10 +1425,20 @@ async function handleSaveImageMessage(event, env, userId, session) {
     return;
   }
 
+  if (!session?.game_type) {
+    await replyMessage(
+      event.replyToken,
+      "請先選擇彩種，再傳入圖片。",
+      env.LINE_CHANNEL_ACCESS_TOKEN
+    );
+    return;
+  }
+
   const rawMessageId = await saveRawMessage(env.DB, {
     friendId: session.friend_id,
     lineUserId: userId,
     messageType: "image",
+    gameType: session.game_type,
     rawText: null,
     imageMessageId: event.message.id,
   });
@@ -1072,7 +1447,7 @@ async function handleSaveImageMessage(event, env, userId, session) {
     await replyMessage(
       event.replyToken,
       [
-        `已收到 ${session.friend_name} 的圖片注單。`,
+        `已收到 ${session.friend_name}／${session.game_type} 的圖片注單。`,
         "目前尚未設定 OPENAI_API_KEY，圖片已先保存，但尚未解析。",
       ].join("\n"),
       env.LINE_CHANNEL_ACCESS_TOKEN
@@ -1084,12 +1459,13 @@ async function handleSaveImageMessage(event, env, userId, session) {
     rawMessageId,
     friendId: session.friend_id,
     lineUserId: userId,
+    gameType: session.game_type,
     messageId: event.message.id,
   });
 
   await replyMessage(
     event.replyToken,
-    buildOrderReceivedMessage(session.friend_name, parseResult),
+    buildOrderReceivedMessage(`${session.friend_name}／${session.game_type}`, parseResult),
     env.LINE_CHANNEL_ACCESS_TOKEN
   );
 }
@@ -1187,6 +1563,7 @@ async function saveAIParseResultAndEntries(env, message, aiResult) {
     rawMessageId: message.rawMessageId,
     friendId: message.friendId,
     lineUserId: message.lineUserId,
+    gameType: message.gameType,
     rawText: normalizedText,
   });
 

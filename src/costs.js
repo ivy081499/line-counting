@@ -1,19 +1,23 @@
-import { DEFAULT_COST_VALUES_BY_GAME, PENDING_ACTIONS } from './constants.js';
+import {
+  DEFAULT_COST_VALUES_BY_GAME,
+  DEFAULT_PRIZE_VALUES_BY_GAME,
+  PENDING_ACTIONS,
+} from './constants.js';
 
 export function parseCostCsvLine(gameType, text) {
   const values = String(text || "")
     .trim()
     .split(",")
     .map((value) => value.trim());
-  const exampleText = formatCostValues(DEFAULT_COST_VALUES_BY_GAME[gameType]);
+  const exampleText = formatCostPrizeValues(gameType);
 
-  if (values.length !== 4) {
-    throw new Error(`請輸入四個用逗號分隔的數字，例如 ${exampleText}`);
+  if (values.length !== 7) {
+    throw new Error(`請輸入七個用逗號分隔的數字，例如 ${exampleText}`);
   }
 
   const numbers = values.map((value) => Number(value));
   if (numbers.some((value) => Number.isNaN(value))) {
-    throw new Error(`成本只能包含數字與逗號，例如 ${exampleText}`);
+    throw new Error(`設定只能包含數字與逗號，例如 ${exampleText}`);
   }
 
   return buildCostRowFromValues(gameType, numbers);
@@ -26,11 +30,21 @@ export function buildCostRowFromValues(gameType, values) {
     star3Cost: values[1],
     star4Cost: values[2],
     carCost: values[3],
+    star2Prize: values[4],
+    star3Prize: values[5],
+    star4Prize: values[6],
   };
 }
 
 export function formatCostValues(values) {
   return values.join(",");
+}
+
+export function formatCostPrizeValues(gameType) {
+  return [
+    ...DEFAULT_COST_VALUES_BY_GAME[gameType],
+    ...DEFAULT_PRIZE_VALUES_BY_GAME[gameType],
+  ].join(",");
 }
 
 export function buildEditCostPendingAction(friendId, gameIndex, costRows) {

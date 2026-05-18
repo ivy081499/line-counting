@@ -1,5 +1,9 @@
-import { COMMANDS, DEFAULT_COST_VALUES_BY_GAME, INTERNAL_COMMANDS } from './constants.js';
-import { formatCostValues } from './costs.js';
+import {
+  COMMANDS,
+  COST_GAME_TYPES,
+  INTERNAL_COMMANDS,
+} from './constants.js';
+import { formatCostPrizeValues } from './costs.js';
 import { addDaysToTaipeiDate } from './utils.js';
 
 export async function replyMessage(replyToken, text, channelAccessToken) {
@@ -140,6 +144,30 @@ export async function replyFriendPicker(replyToken, friends, channelAccessToken)
         },
       ],
     }),
+  });
+}
+
+export async function replyGameTypePicker(
+  replyToken,
+  friend,
+  channelAccessToken
+) {
+  const buttons = COST_GAME_TYPES.map((gameType) => ({
+    type: "button",
+    style: "primary",
+    color: "#06C755",
+    action: {
+      type: "message",
+      label: gameType,
+      text: `${INTERNAL_COMMANDS.SELECT_GAME_PREFIX}${gameType}`,
+    },
+  }));
+
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: "請選擇彩種",
+    title: `${friend.name} 下單彩種`,
+    description: "選好後，接下來傳入的文字或圖片注單會使用這個彩種計算。",
+    buttons,
   });
 }
 
@@ -586,6 +614,45 @@ export async function replyCostManagementFriendPicker(
   });
 }
 
+export async function replyCostManagementMenu(replyToken, channelAccessToken) {
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: "成本管理",
+    title: "成本管理",
+    description: "管理朋友成本與獎金、開獎號碼，或查看每日總報表。",
+    buttons: [
+      {
+        type: "button",
+        style: "primary",
+        color: "#7B61FF",
+        action: {
+          type: "message",
+          label: "朋友成本與獎金",
+          text: COMMANDS.FRIEND_COST_MANAGEMENT,
+        },
+      },
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: "開獎號碼",
+          text: COMMANDS.WINNING_NUMBER_MANAGEMENT,
+        },
+      },
+      {
+        type: "button",
+        style: "secondary",
+        action: {
+          type: "message",
+          label: "每日總報表",
+          text: COMMANDS.DAILY_TOTAL_REPORT,
+        },
+      },
+    ],
+  });
+}
+
 function buildRawMessageLabel(rawText, index) {
   const singleLineText = String(rawText || "")
     .replace(/\s+/g, " ")
@@ -601,9 +668,9 @@ function buildRawMessageLabel(rawText, index) {
 
 export async function replyCostActionMenu(replyToken, friend, channelAccessToken) {
   await replyButtonMenu(replyToken, channelAccessToken, {
-    altText: `成本管理：${friend.name}`,
-    title: `${friend.name} 成本管理`,
-    description: "可查看或編輯 539、大樂透、港號與車的成本。",
+    altText: `成本與獎金：${friend.name}`,
+    title: `${friend.name} 成本與獎金`,
+    description: "可查看或編輯 539、大樂透、港號的下注成本與中獎金額。",
     buttons: [
       {
         type: "button",
@@ -630,9 +697,9 @@ export async function replyCostActionMenu(replyToken, friend, channelAccessToken
 
 export async function replyCostEditModeMenu(replyToken, friend, channelAccessToken) {
   await replyButtonMenu(replyToken, channelAccessToken, {
-    altText: `編輯成本：${friend.name}`,
-    title: `${friend.name} 編輯成本`,
-    description: "可以直接套用預設成本，或改用手動輸入逐項設定。",
+    altText: `編輯成本與獎金：${friend.name}`,
+    title: `${friend.name} 編輯成本與獎金`,
+    description: "可以直接套用預設值，或改用手動輸入逐項設定。",
     buttons: [
       {
         type: "button",
@@ -640,7 +707,7 @@ export async function replyCostEditModeMenu(replyToken, friend, channelAccessTok
         color: "#06C755",
         action: {
           type: "message",
-          label: "套用預設成本",
+          label: "套用預設值",
           text: `${INTERNAL_COMMANDS.APPLY_DEFAULT_COST_PREFIX}${friend.name}`,
         },
       },
@@ -665,14 +732,14 @@ export async function replyCostInputPrompt(
   noticeText = null
 ) {
   const contents = [];
-  const defaultCostText = formatCostValues(DEFAULT_COST_VALUES_BY_GAME[gameType]);
+  const defaultCostText = formatCostPrizeValues(gameType);
 
   if (noticeText) {
     contents.push({
       type: "text",
       text: noticeText,
       size: "sm",
-      color: noticeText.startsWith("成本格式不正確") ? "#D93025" : "#06C755",
+      color: noticeText.includes("格式不正確") ? "#D93025" : "#06C755",
       wrap: true,
     });
   }
@@ -680,7 +747,7 @@ export async function replyCostInputPrompt(
   contents.push(
     {
       type: "text",
-      text: `請輸入 ${friendName} 的成本`,
+      text: `請輸入 ${friendName} 的成本與獎金`,
       size: "sm",
       color: "#666666",
       wrap: true,
@@ -701,7 +768,7 @@ export async function replyCostInputPrompt(
     },
     {
       type: "text",
-      text: "四個數字請用逗號串接，依序代表二星、三星、四星、車組成本。",
+      text: "七個數字請用逗號串接，依序代表二星成本、三星成本、四星成本、車組成本、二星獎金、三星獎金、四星獎金。",
       size: "sm",
       color: "#666666",
       wrap: true,
@@ -719,7 +786,7 @@ export async function replyCostInputPrompt(
       messages: [
         {
           type: "flex",
-          altText: `請輸入「${gameType}」成本`,
+          altText: `請輸入「${gameType}」成本與獎金`,
           contents: {
             type: "bubble",
             body: {
@@ -732,5 +799,134 @@ export async function replyCostInputPrompt(
         },
       ],
     }),
+  });
+}
+
+export async function replyWinningNumberDateMenu(replyToken, channelAccessToken) {
+  const today = addDaysToTaipeiDate(0);
+  const yesterday = addDaysToTaipeiDate(-1);
+
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: "開獎號碼",
+    title: "開獎號碼",
+    description: "請先選日期，再選彩種。輸入新號碼會新增或覆蓋原號碼。",
+    buttons: [
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: `今天 ${today}`,
+          text: `${INTERNAL_COMMANDS.WINNING_NUMBER_DATE_PREFIX}${today}`,
+        },
+      },
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: `昨天 ${yesterday}`,
+          text: `${INTERNAL_COMMANDS.WINNING_NUMBER_DATE_PREFIX}${yesterday}`,
+        },
+      },
+      {
+        type: "button",
+        style: "secondary",
+        action: {
+          type: "message",
+          label: "特定日期",
+          text: `${INTERNAL_COMMANDS.WINNING_NUMBER_DATE_PREFIX}指定日期`,
+        },
+      },
+    ],
+  });
+}
+
+export async function replyWinningNumberGamePicker(
+  replyToken,
+  dateText,
+  channelAccessToken
+) {
+  const buttons = COST_GAME_TYPES.map((gameType) => ({
+    type: "button",
+    style: "primary",
+    color: "#1A73E8",
+    action: {
+      type: "message",
+      label: gameType,
+      text: `${INTERNAL_COMMANDS.WINNING_NUMBER_GAME_PREFIX}${dateText}|${gameType}`,
+    },
+  }));
+
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: `請選擇 ${dateText} 開獎彩種`,
+    title: `${dateText} 開獎號碼`,
+    description: "請選擇要新增、查看、編輯或刪除開獎號碼的彩種。",
+    buttons,
+  });
+}
+
+export async function replyWinningNumberInputPrompt(
+  replyToken,
+  dateText,
+  gameType,
+  winningNumber,
+  channelAccessToken
+) {
+  const lines = [`${dateText} ${gameType} 開獎號碼`];
+
+  if (winningNumber) {
+    lines.push(`目前號碼：${winningNumber.numbers.join(" ")}`);
+  } else {
+    lines.push("目前尚未設定。");
+  }
+
+  lines.push("");
+  lines.push("請輸入開獎號碼，例如：01 02 03 04 05");
+
+  await replyMessage(replyToken, lines.join("\n"), channelAccessToken);
+}
+
+export async function replyDailyReportDateMenu(replyToken, channelAccessToken) {
+  const today = addDaysToTaipeiDate(0);
+  const yesterday = addDaysToTaipeiDate(-1);
+
+  await replyButtonMenu(replyToken, channelAccessToken, {
+    altText: "每日總報表",
+    title: "每日總報表",
+    description: "請選擇日期，查看所有朋友的下注收入、中獎支出與盈虧。",
+    buttons: [
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: `今天 ${today}`,
+          text: `${INTERNAL_COMMANDS.DAILY_REPORT_DATE_PREFIX}${today}`,
+        },
+      },
+      {
+        type: "button",
+        style: "primary",
+        color: "#1A73E8",
+        action: {
+          type: "message",
+          label: `昨天 ${yesterday}`,
+          text: `${INTERNAL_COMMANDS.DAILY_REPORT_DATE_PREFIX}${yesterday}`,
+        },
+      },
+      {
+        type: "button",
+        style: "secondary",
+        action: {
+          type: "message",
+          label: "特定日期",
+          text: `${INTERNAL_COMMANDS.DAILY_REPORT_DATE_PREFIX}指定日期`,
+        },
+      },
+    ],
   });
 }

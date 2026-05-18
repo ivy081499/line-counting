@@ -20,6 +20,18 @@ export function formatNumber(value) {
   return Number(value.toFixed(4)).toString();
 }
 
+export function formatNumberWithCommas(value) {
+  const normalizedValue = formatNumber(value);
+  const [integerPart, decimalPart] = normalizedValue.split(".");
+
+  return [
+    integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ","),
+    decimalPart,
+  ]
+    .filter((part) => part !== undefined)
+    .join(".");
+}
+
 export function parseDateFriendPayload(payload) {
   const [dateText = "", ...friendNameParts] = String(payload || "").split("|");
 
@@ -75,4 +87,28 @@ export function isAllowedUser(userId, allowedUserIds) {
     .split(",")
     .map((id) => id.trim())
     .includes(userId);
+}
+
+export function parseWinningNumbersText(text) {
+  const value = String(text || "").trim();
+  if (!value) {
+    throw new Error("請輸入開獎號碼。");
+  }
+
+  const digits = value.replace(/\D/g, "");
+  if (!digits || digits.length % 2 !== 0) {
+    throw new Error("開獎號碼需為兩位數一組。");
+  }
+
+  const numbers = [];
+  for (let index = 0; index < digits.length; index += 2) {
+    numbers.push(digits.slice(index, index + 2));
+  }
+
+  const uniqueNumbers = [...new Set(numbers)];
+  if (uniqueNumbers.length !== numbers.length) {
+    throw new Error("開獎號碼不可重複。");
+  }
+
+  return numbers;
 }
