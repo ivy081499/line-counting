@@ -1,0 +1,106 @@
+{
+  "id": "image-584597",
+  "type": "image",
+  "image": {
+    "path": "../../images/584597.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "0911143136 二x0.5 三x0.5",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "04142434x07172737 二x2",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "01112131 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "02122232 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "03132333 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "04142434 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "05152535 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "06162636 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "07172737 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "08182838 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "09192939 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "102030 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "2834353637 三x0.1 四x0.2",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0419223637 三x0.1 四x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "043637 二x0.5 三x1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "082032 三x3",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "19x0.2車",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "04x0.3車",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "24x0.3車",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

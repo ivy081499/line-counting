@@ -1,0 +1,16 @@
+{
+  "id": "image-584603",
+  "type": "image",
+  "image": {
+    "path": "../../images/584603.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "04192630 二x0.5 三x0.5",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

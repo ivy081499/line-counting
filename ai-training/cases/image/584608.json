@@ -1,0 +1,31 @@
+{
+  "id": "image-584608",
+  "type": "image",
+  "image": {
+    "path": "../../images/584608.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "22x2029x1525 二x5 三x5",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "22x1車",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "29x1車",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "15x1車",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,16 @@
+{
+  "id": "image-120444",
+  "type": "image",
+  "image": {
+    "path": "../../images/120444.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "0307102539 二x0.5 三x0.5",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

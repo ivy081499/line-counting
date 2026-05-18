@@ -1,0 +1,48 @@
+{
+  "id": "text-personal-formats",
+  "type": "text",
+  "input": "02.38二×3\n02×38×22.33.37二三×|\n10.20.30二三×|\n\n33,38各0.65車\n\n0610\n2x3\n\n539=06-09-12-20-33=2-3×0.5\n\n4尾*7尾\n二星*5",
+  "lines": [
+    {
+      "original": "02.38二×3",
+      "normalized": "02x38 二x3",
+      "confidence": 0.99
+    },
+    {
+      "original": "02×38×22.33.37二三×|",
+      "normalized": "02x38x223337 二x1 三x1",
+      "confidence": 0.99
+    },
+    {
+      "original": "10.20.30二三×|",
+      "normalized": "102030 二x1 三x1",
+      "confidence": 0.99
+    },
+    {
+      "original": "33,38各0.65車",
+      "normalized": "33x0.65車",
+      "confidence": 0.99
+    },
+    {
+      "original": "33,38各0.65車",
+      "normalized": "38x0.65車",
+      "confidence": 0.99
+    },
+    {
+      "original": "0610 / 2x3",
+      "normalized": "06x10 二x3",
+      "confidence": 0.99
+    },
+    {
+      "original": "539=06-09-12-20-33=2-3×0.5",
+      "normalized": "0609122033 二x0.5 三x0.5",
+      "confidence": 0.99
+    },
+    {
+      "original": "4尾*7尾 / 二星*5",
+      "normalized": "04142434x07172737 二x5",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

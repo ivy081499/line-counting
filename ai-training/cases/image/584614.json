@@ -1,0 +1,21 @@
+{
+  "id": "image-584614",
+  "type": "image",
+  "image": {
+    "path": "../../images/584614.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "02122232x08182838 二x0.5",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "112233x021232x102030 二x0.1 三x0.1",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

@@ -2,7 +2,9 @@
   "type": "module",
   "scripts": {
     "build": "esbuild src/main.js --bundle --format=esm --platform=browser --target=es2022 --charset=utf8 --outfile=dist/worker.js && cp dist/worker.js main.js",
-    "check": "node --input-type=module --check < src/main.js"
+    "check": "node --input-type=module --check < src/main.js",
+    "ai:build-training": "node ai-training/scripts/build-training-jsonl.js",
+    "ai:eval": "node ai-training/scripts/run-eval.js"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

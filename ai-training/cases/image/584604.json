@@ -1,0 +1,16 @@
+{
+  "id": "image-584604",
+  "type": "image",
+  "image": {
+    "path": "../../images/584604.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "11151738 二x1 三x1",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}
