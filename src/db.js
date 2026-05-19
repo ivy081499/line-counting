@@ -541,7 +541,7 @@ export async function saveRawMessage(db, message) {
 export async function saveParsedEntriesForText(db, message) {
   if (!message.rawMessageId) return [];
 
-  const entries = parseTextToCalculationEntries(message.rawText);
+  const entries = parseTextToCalculationEntries(message.rawText, message.gameType);
 
   for (const entry of entries) {
     await db

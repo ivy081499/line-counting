@@ -1,15 +1,18 @@
-import { DEFAULT_CAR_GAME_MAX_NUMBER } from './constants.js';
+import {
+  DEFAULT_CAR_GAME_MAX_NUMBER,
+  GAME_NUMBER_MAX_BY_TYPE,
+} from './constants.js';
 
-export function parseTextToCalculationEntries(text) {
+export function parseTextToCalculationEntries(text, gameType = "539") {
   return String(text || "")
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .map(parseCalculationLine);
+    .map((line) => parseCalculationLine(line, gameType));
 }
 
-function parseCalculationLine(line) {
-  const carEntry = parseCarCalculationLine(line);
+function parseCalculationLine(line, gameType) {
+  const carEntry = parseCarCalculationLine(line, gameType);
   if (carEntry) return carEntry;
 
   const parts = line.split(/\s+/);
@@ -31,7 +34,8 @@ function parseCalculationLine(line) {
       throw new Error("缺少號碼區或規則區");
     }
 
-    const rows = parseNumberRows(numberPart);
+    const rows = parseNumberRows(numberPart, gameType);
+    validateNoDuplicateNumbers(rows);
     const rules = parseCalculationRules(rulePart);
 
     entry.rows = rows;
@@ -59,7 +63,7 @@ function parseCalculationLine(line) {
   return entry;
 }
 
-function parseCarCalculationLine(line) {
+function parseCarCalculationLine(line, gameType = "539") {
   const normalized = String(line)
     .trim()
     .replace(/[×＊*]/g, "x")
@@ -70,7 +74,8 @@ function parseCarCalculationLine(line) {
 
   const targetNumber = match[1].padStart(2, "0");
   const multiplier = Number(match[2]);
-  const allNumbers = buildGameNumbers(DEFAULT_CAR_GAME_MAX_NUMBER);
+  const maxNumber = getGameNumberMax(gameType) || DEFAULT_CAR_GAME_MAX_NUMBER;
+  const allNumbers = buildGameNumbers(maxNumber);
   const otherNumbers = allNumbers.filter((number) => number !== targetNumber);
   const rows = [[targetNumber], otherNumbers];
   const baseCount = otherNumbers.length;
@@ -92,7 +97,7 @@ function parseCarCalculationLine(line) {
     totalAmount: amount,
     errorMessage: allNumbers.includes(targetNumber)
       ? null
-      : `車組號碼超出 539 範圍：${targetNumber}`,
+      : `車組號碼超出 ${gameType} 範圍：${targetNumber}`,
   };
 }
 
@@ -106,16 +111,18 @@ function buildGameNumbers(maxNumber) {
   return numbers;
 }
 
-function parseNumberRows(numberPart) {
+function parseNumberRows(numberPart, gameType = "539") {
   const normalized = String(numberPart)
     .trim()
     .replace(/[×＊*]/g, "x")
     .replace(/X/g, "x");
 
+  validateNumberPartFormat(normalized);
+
   const rowTexts = normalized.includes("x")
-    ? normalized.split(/x+/).filter(Boolean)
+    ? splitBySeparator(normalized, "x", numberPart)
     : normalized.includes(".")
-      ? normalized.split(/\.+/).filter(Boolean)
+      ? splitBySeparator(normalized, ".", numberPart)
       : splitIntoTwoDigitNumbers(normalized);
 
   const rows = rowTexts.map((rowText) => splitIntoTwoDigitNumbers(rowText));
@@ -124,13 +131,44 @@ function parseNumberRows(numberPart) {
     throw new Error("號碼區沒有可用號碼");
   }
 
+  validateNumberRanges(rows, gameType);
+
   return rows;
 }
 
+function validateNumberPartFormat(value) {
+  if (!/^[0-9x.]+$/.test(value)) {
+    throw new Error("號碼區格式不正確，只能使用數字、x 或 . 分隔");
+  }
+
+  if (/[x.]{2,}/.test(value) || /^[x.]|[x.]$/.test(value)) {
+    throw new Error(`號碼區分隔格式不正確：${value}`);
+  }
+
+  if (value.includes("x") && value.includes(".")) {
+    throw new Error("號碼區不可同時使用 x 和 . 分隔");
+  }
+}
+
+function splitBySeparator(value, separator, originalValue) {
+  const escapedSeparator = separator === "." ? "\\." : separator;
+  const parts = value.split(new RegExp(escapedSeparator));
+
+  if (parts.some((part) => part.length === 0)) {
+    throw new Error(`號碼區分隔格式不正確：${originalValue}`);
+  }
+
+  return parts;
+}
+
 function splitIntoTwoDigitNumbers(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = String(value);
 
   if (!digits) return [];
+
+  if (!/^\d+$/.test(digits)) {
+    throw new Error(`號碼區格式不正確：${value}`);
+  }
 
   if (digits.length % 2 !== 0) {
     throw new Error(`號碼區位數不是偶數：${value}`);
@@ -142,6 +180,39 @@ function splitIntoTwoDigitNumbers(value) {
   }
 
   return numbers;
+}
+
+function validateNumberRanges(rows, gameType) {
+  const maxNumber = getGameNumberMax(gameType);
+  const label = gameType || "539";
+
+  for (const row of rows) {
+    for (const numberText of row) {
+      const number = Number(numberText);
+
+      if (!Number.isInteger(number) || number < 1 || number > maxNumber) {
+        throw new Error(`${label} 號碼超出範圍：${numberText}`);
+      }
+    }
+  }
+}
+
+function validateNoDuplicateNumbers(rows) {
+  const seen = new Set();
+
+  for (const row of rows) {
+    for (const number of row) {
+      if (seen.has(number)) {
+        throw new Error(`號碼重複：${number}`);
+      }
+
+      seen.add(number);
+    }
+  }
+}
+
+function getGameNumberMax(gameType) {
+  return GAME_NUMBER_MAX_BY_TYPE[gameType] || GAME_NUMBER_MAX_BY_TYPE["539"];
 }
 
 function parseCalculationRules(rulePart) {
