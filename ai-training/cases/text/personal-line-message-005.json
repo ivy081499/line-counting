@@ -1,0 +1,13 @@
+{
+  "id": "text-personal-line-message-005",
+  "type": "text",
+  "input": "0610\n2x3",
+  "lines": [
+    {
+      "original": "0610 / 2x3",
+      "normalized": "06x10 二x3",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

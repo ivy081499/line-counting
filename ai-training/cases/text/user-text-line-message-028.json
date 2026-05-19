@@ -1,0 +1,13 @@
+{
+  "id": "text-user-text-line-message-028",
+  "type": "text",
+  "input": "539一4尾碰10X20X30X05二星乘1",
+  "lines": [
+    {
+      "original": "539一4尾碰10X20X30X05二星乘1",
+      "normalized": "04142434x10203005 二x1",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,13 @@
+{
+  "id": "text-line-message-slash-001",
+  "type": "text",
+  "input": "33/35/37\n二三各*1",
+  "lines": [
+    {
+      "original": "33/35/37 / 二三各*1",
+      "normalized": "333537 二x1 三x1",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

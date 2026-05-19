@@ -1,0 +1,18 @@
+{
+  "id": "text-user-text-line-message-031",
+  "type": "text",
+  "input": "33,38各0.65車",
+  "lines": [
+    {
+      "original": "33,38各0.65車",
+      "normalized": "33x0.65車",
+      "confidence": 0.99
+    },
+    {
+      "original": "33,38各0.65車",
+      "normalized": "38x0.65車",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

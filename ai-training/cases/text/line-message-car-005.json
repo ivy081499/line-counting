@@ -1,0 +1,13 @@
+{
+  "id": "text-line-message-car-005",
+  "type": "text",
+  "input": "37*1車",
+  "lines": [
+    {
+      "original": "37*1車",
+      "normalized": "37x1車",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

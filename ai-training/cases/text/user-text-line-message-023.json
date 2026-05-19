@@ -1,0 +1,13 @@
+{
+  "id": "text-user-text-line-message-023",
+  "type": "text",
+  "input": "04/07/24/27/37\n二星*3\n三星*0.5",
+  "lines": [
+    {
+      "original": "04/07/24/27/37 / 二星*3 / 三星*0.5",
+      "normalized": "0407242737 二x3 三x0.5",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

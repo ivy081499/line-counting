@@ -1,0 +1,23 @@
+{
+  "id": "text-line-message-mixed-001",
+  "type": "text",
+  "input": "35*0.5車 33*0.5車\n33/35/37/36\n二三星*1",
+  "lines": [
+    {
+      "original": "35*0.5車 33*0.5車",
+      "normalized": "35x0.5車",
+      "confidence": 0.99
+    },
+    {
+      "original": "35*0.5車 33*0.5車",
+      "normalized": "33x0.5車",
+      "confidence": 0.99
+    },
+    {
+      "original": "33/35/37/36 / 二三星*1",
+      "normalized": "33353736 二x1 三x1",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

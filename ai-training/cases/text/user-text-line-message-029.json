@@ -1,0 +1,13 @@
+{
+  "id": "text-user-text-line-message-029",
+  "type": "text",
+  "input": "539一05X0，6車",
+  "lines": [
+    {
+      "original": "539一05X0，6車",
+      "normalized": "05x0.6車",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

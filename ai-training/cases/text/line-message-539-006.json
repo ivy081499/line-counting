@@ -1,0 +1,13 @@
+{
+  "id": "text-line-message-539-006",
+  "type": "text",
+  "input": "539=04-12-17-34-37=2-3×1",
+  "lines": [
+    {
+      "original": "539=04-12-17-34-37=2-3×1",
+      "normalized": "0412173437 二x1 三x1",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

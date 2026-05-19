@@ -1,0 +1,13 @@
+{
+  "id": "text-line-message-tail-001",
+  "type": "text",
+  "input": "4尾*7尾\n二星*2",
+  "lines": [
+    {
+      "original": "4尾*7尾 / 二星*2",
+      "normalized": "04142434x07172737 二x2",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,18 @@
+{
+  "id": "text-line-message-car-004",
+  "type": "text",
+  "input": "33/37各03車",
+  "lines": [
+    {
+      "original": "33/37各03車",
+      "normalized": "33x0.3車",
+      "confidence": 0.99
+    },
+    {
+      "original": "33/37各03車",
+      "normalized": "37x0.3車",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,13 @@
+{
+  "id": "text-user-text-line-message-045",
+  "type": "text",
+  "input": "12×21×04.24×14.34二三四×0.5",
+  "lines": [
+    {
+      "original": "12×21×04.24×14.34二三四×0.5",
+      "normalized": "12x21x0424x1434 二x0.5 三x0.5 四x0.5",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

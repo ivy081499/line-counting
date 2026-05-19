@@ -1,0 +1,13 @@
+{
+  "id": "text-personal-line-message-001",
+  "type": "text",
+  "input": "02.38二×3",
+  "lines": [
+    {
+      "original": "02.38二×3",
+      "normalized": "02x38 二x3",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

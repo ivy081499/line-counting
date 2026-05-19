@@ -1,0 +1,13 @@
+{
+  "id": "text-user-text-line-message-027",
+  "type": "text",
+  "input": "1027\n2x2",
+  "lines": [
+    {
+      "original": "1027 / 2x2",
+      "normalized": "10x27 二x2",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,13 @@
+{
+  "id": "text-user-text-line-message-024",
+  "type": "text",
+  "input": "122227\n2x2\n3x1",
+  "lines": [
+    {
+      "original": "122227 / 2x2 / 3x1",
+      "normalized": "122227 二x2 三x1",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

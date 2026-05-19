@@ -1,0 +1,13 @@
+{
+  "id": "text-user-text-line-message-025",
+  "type": "text",
+  "input": "4尾*7尾\n二星*5",
+  "lines": [
+    {
+      "original": "4尾*7尾 / 二星*5",
+      "normalized": "04142434x07172737 二x5",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

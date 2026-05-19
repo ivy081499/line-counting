@@ -1,0 +1,13 @@
+{
+  "id": "text-personal-line-message-006",
+  "type": "text",
+  "input": "539=06-09-12-20-33=2-3×0.5",
+  "lines": [
+    {
+      "original": "539=06-09-12-20-33=2-3×0.5",
+      "normalized": "0609122033 二x0.5 三x0.5",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

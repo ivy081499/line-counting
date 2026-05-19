@@ -1,0 +1,13 @@
+{
+  "id": "text-line-message-spaced-001",
+  "type": "text",
+  "input": "01 22 24 34 \n二星*1",
+  "lines": [
+    {
+      "original": "01 22 24 34 / 二星*1",
+      "normalized": "01222434 二x1",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}
