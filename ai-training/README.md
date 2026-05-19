@@ -85,6 +85,16 @@ ai-training/output/validation.jsonl
 
 預設 20% 案例放進 validation，且用案例 id 穩定排序。
 
+目前最近一次產生結果：
+
+```text
+Cases: 27
+Training: 22
+Validation: 5
+```
+
+這個指令只讀本機資料並產生 JSONL，不會呼叫 OpenAI API。
+
 ## 跑評測
 
 需要先設定：
@@ -107,6 +117,19 @@ npm run ai:eval
 ```
 
 腳本會逐筆案例呼叫 OpenAI Responses API，並比對輸出的 `normalized` 是否跟正解完全一致。
+
+注意：`npm run ai:eval` 會消耗 OpenAI API 額度。除非使用者明確說新訓練資料已提供完並同意測試，不要主動執行。
+
+若要使用本機 `ivy.env`：
+
+```bash
+set -a
+source ./ivy.env
+set +a
+OPENAI_MODEL="ft:gpt-4o-2024-08-06:personal::DgvIeiS6" npm run ai:eval
+```
+
+`ivy.env` 已被 `.gitignore` 忽略，不要提交，也不要把 key 印出來。
 
 ## 控制 eval 範圍
 
@@ -134,4 +157,28 @@ AI_EVAL_CASES=image-584597,image-8245 npm run ai:eval
 
 ```bash
 AI_EVAL_TYPE=image AI_EVAL_LIMIT=3 npm run ai:eval
+```
+
+## 目前模型狀態
+
+成功建立的模型：
+
+```text
+ft:gpt-4o-2024-08-06:personal::DgvIeiS6
+```
+
+第一次 eval 結果：
+
+```text
+6/27 cases passed
+Failed: 21
+Errored: 0
+```
+
+目前不建議部署到 LINE 正式流程。請先看根目錄 `AI_FAILURE_CASES_TO_COLLECT.md` 補資料，再重跑小範圍 eval，例如：
+
+```bash
+AI_EVAL_LIMIT=5 npm run ai:eval
+AI_EVAL_TYPE=image npm run ai:eval
+AI_EVAL_CASES=image-584597,image-8245 npm run ai:eval
 ```

@@ -4,6 +4,28 @@
 
 使用者透過 LINE Rich Menu 選擇朋友、送出文字或圖片注單，系統會保存原始訊息、解析成標準注單、計算支數，並提供今日/過往報表與成本管理。
 
+## 目前交接狀態
+
+- 工作目錄：`/Users/admin/Desktop/line-counting`
+- 目前所在分支：`對獎`
+- 目前 HEAD：`78df960 完成對獎`
+- `dev` 目前已與 `origin/dev` 對齊在 `2c0eccc`。
+- `對獎` 是本機功能分支，尚未 push；請使用者確認後再自行 push。
+- 歷史中有 merge commit `5ec9f85 Merge remote-tracking branch 'origin/dev' into dev`，但它不是目前 HEAD。
+- 目前 fine-tuned model：`ft:gpt-4o-2024-08-06:personal::DgvIeiS6`
+- 第一版 fine-tuned model eval：`6/27` 通過、`21` 失敗、`0` error。
+- 這個模型目前不適合直接接到 LINE 正式使用；需要補資料、重訓或改走 general vision model + prompt + deterministic post-processing。
+- 不要主動跑 OpenAI API/eval。等使用者明確說新資料補完且同意測試後再跑，避免浪費 API 額度。
+
+下一個 session 建議先讀：
+
+1. `README.md`
+2. `BUSINESS_LOGIC.md`
+3. `ai-training/PROJECT_HANDOFF.md`
+4. `ai-training/README.md`
+5. `ai-training/FINE_TUNE_JOB.md`
+6. `AI_FAILURE_CASES_TO_COLLECT.md`
+
 ## 技術架構
 
 ```text
@@ -88,8 +110,18 @@ OPENAI_MODEL
 fine-tune 成功後，`OPENAI_MODEL` 應設定成：
 
 ```text
-ft:gpt-4o-2024-08-06:...
+ft:gpt-4o-2024-08-06:personal::DgvIeiS6
 ```
+
+但目前 eval 只有 `6/27` 通過，不建議現在設定到正式 LINE Worker。
+
+本機測試用的 API key 放在：
+
+```text
+ivy.env
+```
+
+`ivy.env` 已被 `.gitignore` 忽略。不要把 API key 印出、提交、寫進 Markdown 或貼到聊天。
 
 ## Rich Menu
 
@@ -123,4 +155,4 @@ schema 由 `src/db.js` 的 `ensureDatabaseSchema()` 建立。
 - AI 只做正規化，不做支數計算。
 - 支數計算由 `src/calculations.js` 負責。
 - 圖片 OCR/AI 解析後，也走同一套 `parsed_entries` 流程。
-
+- AI 輸出在 eval 穩定前不能信任，LINE 正式流程必須保留 `ai_parse_results` 方便追查。

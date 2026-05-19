@@ -29,6 +29,33 @@ curl https://api.openai.com/v1/fine_tuning/jobs/ftjob-NMkkD5N3jlMFa7T5F53OVAOw \
   -H "Authorization: Bearer $OPENAI_API_KEY"
 ```
 
+### Eval Result
+
+使用者回報第一版 fine-tuned model eval：
+
+```text
+6/27 cases passed
+Failed: 21
+Errored: 0
+```
+
+結論：
+
+- 模型已成功建立，但解析能力還不夠穩。
+- 目前不要直接部署到 LINE 正式流程。
+- 失敗類型整理在根目錄 `AI_FAILURE_CASES_TO_COLLECT.md`。
+- 後來 `ai-training/output/eval-report.json` 曾被一次網路失敗的 eval 覆蓋，所以不要只看該檔判斷這次 `6/27` 的細節。
+
+注意：目前 repository 重新 build training JSONL 的結果是：
+
+```text
+Cases: 27
+Training: 22
+Validation: 5
+```
+
+但 Attempt 2 成功模型當時是用 `Training: 13`、`Validation: 14` 的較小 split 訓練出來。
+
 ## Attempt 1: Cancelled
 
 建立日期：2026-05-18
@@ -70,3 +97,5 @@ curl https://api.openai.com/v1/fine_tuning/jobs/ftjob-5KdTCTeCN7QcQSewQNTGn1Tt \
 ```text
 ft:gpt-4o-2024-08-06:personal::DgvIeiS6
 ```
+
+目前可用不代表可上線。請先重跑受控 eval，確認通過率足夠後再考慮設定到 Cloudflare Worker 的 `OPENAI_MODEL`。

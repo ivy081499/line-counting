@@ -232,10 +232,22 @@ npm run ai:build-training
 fine-tune 成功後，把模型 ID 設到 Cloudflare Worker：
 
 ```text
-OPENAI_MODEL=ft:gpt-4o-2024-08-06:...
+OPENAI_MODEL=ft:gpt-4o-2024-08-06:personal::DgvIeiS6
 ```
 
 之後 LINE 的文字與圖片都會透過這個 fine-tuned model 正規化。
+
+但目前第一版 fine-tuned model eval 只有：
+
+```text
+6/27 cases passed
+Failed: 21
+Errored: 0
+```
+
+所以目前不要直接把這個模型接到正式 LINE Worker。下一步應該先補訓練資料、重跑 eval，或測試 general vision model + prompt + deterministic post-processing 的方案。正式上線前至少要確認常見圖片、文字格式、車組、尾數、扣除類案例都能穩定通過。
+
+本機 OpenAI API key 放在 `ivy.env`，該檔被 `.gitignore` 忽略。不要把 key 提交或寫進文件。除非使用者明確說新訓練資料已提供完並同意測試，不要主動跑 eval 或任何會打 OpenAI API 的指令。
 
 ## 下一個 Codex Session 建議先讀
 
@@ -249,4 +261,3 @@ OPENAI_MODEL=ft:gpt-4o-2024-08-06:...
 6. `src/aiParser.js`
 7. `src/calculations.js`
 8. `src/db.js`
-
