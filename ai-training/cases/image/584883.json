@@ -1,0 +1,13 @@
+{
+  "id": "image-584883",
+  "type": "image",
+  "image": {
+    "path": "../../images/584883.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    { "original": "", "normalized": "34x071737x182838 二x1", "confidence": 0.95 },
+    { "original": "", "normalized": "01222434111617 二x0.5", "confidence": 0.95 }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,15 @@
+{
+  "id": "image-584914",
+  "type": "image",
+  "image": {
+    "path": "../../images/584914.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    { "original": "", "normalized": "010410112131 三x0.1 四x0.1", "confidence": 0.95 },
+    { "original": "", "normalized": "0311121323 三x0.1 四x0.1", "confidence": 0.95 },
+    { "original": "", "normalized": "0104101121 三x0.1 四x1", "confidence": 0.95 },
+    { "original": "", "normalized": "1617182022 三x0.1 四x0.1", "confidence": 0.95 }
+  ],
+  "warnings": []
+}

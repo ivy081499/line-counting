@@ -1,0 +1,27 @@
+{
+  "id": "image-584916",
+  "type": "image",
+  "image": {
+    "path": "../../images/584916.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    { "original": "", "normalized": "0105101315 三x0.05 四x0.05", "confidence": 0.95 },
+    { "original": "", "normalized": "0102031218 三x0.05 四x0.05", "confidence": 0.95 },
+    { "original": "", "normalized": "1516172024 三x0.05 四x0.05", "confidence": 0.95 },
+    { "original": "", "normalized": "092133 三x1 二x0.25", "confidence": 0.95 },
+    { "original": "", "normalized": "01112131 三x0.15", "confidence": 0.95 },
+    { "original": "", "normalized": "02122232 三x0.15", "confidence": 0.95 },
+    { "original": "", "normalized": "03132333 三x0.15", "confidence": 0.95 },
+    { "original": "", "normalized": "04142434 三x0.15", "confidence": 0.95 },
+    { "original": "", "normalized": "05152535 三x0.15", "confidence": 0.95 },
+    { "original": "", "normalized": "06162636 三x0.15", "confidence": 0.95 },
+    { "original": "", "normalized": "07172737 三x0.15", "confidence": 0.95 },
+    { "original": "", "normalized": "08182838 三x0.15", "confidence": 0.95 },
+    { "original": "", "normalized": "09192939 三x0.15", "confidence": 0.95 },
+    { "original": "", "normalized": "102030 三x0.15", "confidence": 0.95 }
+  ],
+  "warnings": [
+    "原圖寫「全各半」，本案例倍率已除以 2。"
+  ]
+}
