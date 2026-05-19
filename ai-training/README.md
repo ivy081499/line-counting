@@ -13,22 +13,31 @@
 
 ## 新增文字案例
 
-在 `cases/text/` 新增一個 JSON：
+在 `cases/text/` 新增一個 JSON。LINE 實際上是一個灰色泡泡一則訊息，所以文字案例應盡量保持「一則 LINE 訊息一個 case」。
+
+若同一則訊息會拆出多筆標準注單，例如同一泡泡裡同時包含兩筆車組與一筆普通注單，就保持同一個 `input`，並在 `lines` 放多筆輸出。
+
+例：
 
 ```json
 {
-  "id": "text-001",
+  "id": "text-line-message-mixed-001",
   "type": "text",
-  "input": "02.38二×3\n02×38×22.33.37二三×|",
+  "input": "35*0.5車 36*0.2車\n31/35/37/36/39\n二三星*1",
   "lines": [
     {
-      "original": "02.38二×3",
-      "normalized": "02x38 二x3",
+      "original": "35*0.5車 36*0.2車",
+      "normalized": "35x0.5車",
       "confidence": 0.99
     },
     {
-      "original": "02×38×22.33.37二三×|",
-      "normalized": "02x38x223337 二x1 三x1",
+      "original": "35*0.5車 36*0.2車",
+      "normalized": "36x0.2車",
+      "confidence": 0.99
+    },
+    {
+      "original": "31/35/37/36/39 / 二三星*1",
+      "normalized": "3135373639 二x1 三x1",
       "confidence": 0.99
     }
   ],
@@ -88,12 +97,14 @@ ai-training/output/validation.jsonl
 目前最近一次產生結果：
 
 ```text
-Cases: 27
-Training: 22
-Validation: 5
+Cases: 115
+Training: 92
+Validation: 23
 ```
 
 這個指令只讀本機資料並產生 JSONL，不會呼叫 OpenAI API。
+
+目前文字案例已拆成更貼近 LINE 實際輸入的形式：一則 LINE 訊息一個 text case。`handwritten-transcriptions.json` 是手寫/圖片轉錄整批案例，暫時保留為多行。
 
 ## 跑評測
 

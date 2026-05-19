@@ -15,11 +15,13 @@ LINE 官方帳號 + Cloudflare Worker + Cloudflare D1 的注單整理助手。
 
 目前狀態摘要：
 
-- 目前所在分支是 `dev`，HEAD 是 `0d1c1d5 Merge branch '數字檢查' into dev`。
-- `dev` 目前已與 `origin/dev` 對齊在 `0d1c1d5`。
+- 目前所在分支是 `dev`；功能最新 commit 是 `aa72451 拆分LINE文字訊息訓練案例`，本交接文件 commit 會在它之後。
+- `dev` 目前比 `origin/dev` ahead 2；`origin/dev` 在 `963d79b 交接工作`。
 - 今天已將 `網頁報表` 分支與 `數字檢查` 分支 merge 回 `dev`。
+- 今天新增圖片訓練案例 commit：`8281a01 新增圖片訓練案例`。
+- 今天拆分 LINE 文字訊息訓練案例 commit：`aa72451 拆分LINE文字訊息訓練案例`。
 - 目前 `git stash list` 是空的。
-- 工作區仍有 `.DS_Store` 未提交變更，這是非功能檔，先不要混進 commit。
+- 目前工作區乾淨。
 - `dist/worker.js` 已因今天功能更新重新 build；要部署 Cloudflare Worker 時請貼新版 `dist/worker.js`。
 - 本機 Codex 已新增 `counting-handoff` skill；之後使用者說「交接今日counting專案工作」或類似語句時，應更新本專案交接 Markdown。
 - fine-tuned model 已建立成功：`ft:gpt-4o-2024-08-06:personal::DgvIeiS6`。
@@ -60,6 +62,8 @@ LINE 官方帳號 + Cloudflare Worker + Cloudflare D1 的注單整理助手。
 - 使用者可見的「二星 / 三星 / 四星」文案已改成 `二♥ / 三♥ / 四♥`，避免敏感字詞；內部計算仍用 `2 / 3 / 4 / car`。
 - 新增 LINE Rich Menu 底圖：`rich-menu-background-hearts-2500x1686.png`。
 - 下注號碼檢查已補強：格式、號重、彩種範圍。
+- AI 訓練資料新增 12 個圖片案例，並把文字案例調整成更貼近 LINE 實際情境的一則訊息一個 case。
+- 目前 `npm run ai:build-training` 成功結果：`Cases: 115`、`Training: 92`、`Validation: 23`。
 
 ## 下注號碼檢查
 

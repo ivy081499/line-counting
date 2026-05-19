@@ -8,13 +8,16 @@
 
 - 工作目錄：`/Users/admin/Desktop/line-counting`
 - 目前所在分支：`dev`
-- 目前 HEAD：`0d1c1d5 Merge branch '數字檢查' into dev`
-- `dev` 目前已與 `origin/dev` 對齊在 `0d1c1d5`。
+- 功能最新 commit：`aa72451 拆分LINE文字訊息訓練案例`，本交接文件 commit 會在它之後。
+- `dev` 目前比 `origin/dev` ahead 2；`origin/dev` 在 `963d79b 交接工作`。
 - 今天已建立並 merge：
   - `網頁報表`：`896dd59 新增網頁報表與LINE入口`，merge commit `38b32a6`
   - `數字檢查`：`4ecbc4f 補下注號碼檢查`，merge commit `0d1c1d5`
+- 今天新增 AI 訓練資料：
+  - `8281a01 新增圖片訓練案例`
+  - `aa72451 拆分LINE文字訊息訓練案例`
 - 目前沒有 stash。
-- 工作區仍有 `.DS_Store` 未提交變更；不要把它混進功能 commit。
+- 目前工作區乾淨。
 - 本機 Codex 已新增並驗證 `counting-handoff` skill；之後使用者說「交接今日counting專案工作」或類似語句時，應依該 skill 更新本專案交接 Markdown。
 - 歷史中有 merge commit `5ec9f85 Merge remote-tracking branch 'origin/dev' into dev`，但它不是目前 HEAD。
 - 目前 fine-tuned model：`ft:gpt-4o-2024-08-06:personal::DgvIeiS6`
@@ -25,6 +28,7 @@
   - `npm run check`
   - `npm run build`
   - `src/calculations.js` parser smoke tests
+  - `npm run ai:build-training`，目前結果 `Cases: 115`、`Training: 92`、`Validation: 23`
 
 下一個 session 建議先讀：
 

@@ -333,10 +333,12 @@ npm run ai:build-training
 目前最後一次產生結果：
 
 ```text
-Cases: 27
-Training: 22
-Validation: 5
+Cases: 115
+Training: 92
+Validation: 23
 ```
+
+目前文字案例已拆成更貼近 LINE 實際輸入的形式：一則 LINE 訊息一個 text case。若同一則訊息內含多筆注單，則同一個 `input` 對應多筆 `lines`。`handwritten-transcriptions.json` 是手寫/圖片轉錄整批案例，暫時保留為多行。
 
 eval：
 
@@ -425,16 +427,18 @@ fine-tune 成功且 eval 穩定後：
 dev
 ```
 
-目前 HEAD：
+功能最新 commit：
 
 ```text
-0d1c1d5 Merge branch '數字檢查' into dev
+aa72451 拆分LINE文字訊息訓練案例
 ```
 
-`dev` 目前已與 `origin/dev` 對齊在：
+本交接文件 commit 會在它之後。
+
+`dev` 目前比 `origin/dev` ahead 2；`origin/dev` 目前在：
 
 ```text
-0d1c1d5 Merge branch '數字檢查' into dev
+963d79b 交接工作
 ```
 
 歷史中有 merge commit：
@@ -450,15 +454,21 @@ dev
 - `網頁報表`：`896dd59 新增網頁報表與LINE入口`，merge commit `38b32a6`
 - `數字檢查`：`4ecbc4f 補下注號碼檢查`，merge commit `0d1c1d5`
 
+今天新增 AI 訓練資料：
+
+- `8281a01 新增圖片訓練案例`
+- `aa72451 拆分LINE文字訊息訓練案例`
+
 目前 `git stash list` 是空的。
 
-工作區仍有 `.DS_Store` 未提交變更；不要把它混進功能 commit。
+目前工作區乾淨。
 
 今天已跑：
 
 - `npm run check`
 - `npm run build`
 - `src/calculations.js` parser smoke tests
+- `npm run ai:build-training`，目前結果 `Cases: 115`、`Training: 92`、`Validation: 23`
 
 另一個 Codex session 若要做主程式功能開發，建議另開分支，避免同時改 `src/main.js`、`src/aiParser.js`、`package.json`。例如：
 
