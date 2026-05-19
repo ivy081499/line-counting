@@ -48,6 +48,11 @@ export const PENDING_ACTIONS = {
 
 export const COST_GAME_TYPES = ["539", "大樂透", "港號"];
 export const DEFAULT_CAR_GAME_MAX_NUMBER = 39;
+export const GAME_NUMBER_MAX_BY_TYPE = {
+  "539": 39,
+  "大樂透": 49,
+  "港號": 49,
+};
 export const DEFAULT_COST_VALUES_BY_GAME = {
   "539": [70, 75, 80, 70],
   "大樂透": [70, 75, 80, 70],
