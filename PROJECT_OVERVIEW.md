@@ -7,15 +7,24 @@
 ## 目前交接狀態
 
 - 工作目錄：`/Users/admin/Desktop/line-counting`
-- 目前所在分支：`對獎`
-- 目前 HEAD：`78df960 完成對獎`
-- `dev` 目前已與 `origin/dev` 對齊在 `2c0eccc`。
-- `對獎` 是本機功能分支，尚未 push；請使用者確認後再自行 push。
+- 目前所在分支：`dev`
+- 目前 HEAD：`0d1c1d5 Merge branch '數字檢查' into dev`
+- `dev` 目前已與 `origin/dev` 對齊在 `0d1c1d5`。
+- 今天已建立並 merge：
+  - `網頁報表`：`896dd59 新增網頁報表與LINE入口`，merge commit `38b32a6`
+  - `數字檢查`：`4ecbc4f 補下注號碼檢查`，merge commit `0d1c1d5`
+- 目前沒有 stash。
+- 工作區仍有 `.DS_Store` 未提交變更；不要把它混進功能 commit。
+- 本機 Codex 已新增並驗證 `counting-handoff` skill；之後使用者說「交接今日counting專案工作」或類似語句時，應依該 skill 更新本專案交接 Markdown。
 - 歷史中有 merge commit `5ec9f85 Merge remote-tracking branch 'origin/dev' into dev`，但它不是目前 HEAD。
 - 目前 fine-tuned model：`ft:gpt-4o-2024-08-06:personal::DgvIeiS6`
 - 第一版 fine-tuned model eval：`6/27` 通過、`21` 失敗、`0` error。
 - 這個模型目前不適合直接接到 LINE 正式使用；需要補資料、重訓或改走 general vision model + prompt + deterministic post-processing。
 - 不要主動跑 OpenAI API/eval。等使用者明確說新資料補完且同意測試後再跑，避免浪費 API 額度。
+- 今日驗證已跑：
+  - `npm run check`
+  - `npm run build`
+  - `src/calculations.js` parser smoke tests
 
 下一個 session 建議先讀：
 
@@ -86,6 +95,7 @@ dist/worker.js
 - `src/aiParser.js`：呼叫 OpenAI，把文字/圖片正規化成標準 JSON。
 - `src/lineContent.js`：下載 LINE 圖片，轉 base64 給 AI。
 - `src/reports.js`：注單報表與成本報表文字格式。
+- `src/webReport.js`：`/reports` 網頁每日總報表 HTML。
 - `src/lineReplies.js`：LINE text reply 與 Flex Message。
 - `src/costs.js`：成本輸入解析、成本 pending action 編碼/解碼。
 - `src/utils.js`：日期、白名單、數字格式等工具。
@@ -105,6 +115,8 @@ OPENAI_API_KEY
 
 ```text
 OPENAI_MODEL
+REPORT_ACCESS_TOKEN
+REPORT_URL
 ```
 
 fine-tune 成功後，`OPENAI_MODEL` 應設定成：
@@ -134,6 +146,36 @@ ivy.env
 5. 成本管理
 6. 說明
 
+目前「成本管理」子選單中的「每日總報表」按鈕會直接開啟 Worker 的 `/reports` 網頁報表，而不是走 LINE 文字報表流程。使用者仍可手動送出 `每日總報表` 觸發舊的日期選單文字流程。
+
+## 網頁報表
+
+Worker 新增：
+
+```text
+GET /reports
+```
+
+用途：
+
+- 顯示每日總報表。
+- 支援日期搜尋與朋友篩選。
+- 不選朋友時顯示該日期全部朋友。
+- 頁面頂部顯示全日總統計。
+- 每位朋友先顯示朋友總統計。
+- 每位朋友底下依彩種分區，彩種區塊有獨立統計。
+- 注單明細預設收起，可展開查看。
+
+環境變數：
+
+- `REPORT_ACCESS_TOKEN`：可選。設定後 `/reports` 必須帶 `?token=...`；LINE 按鈕會自動帶 token。
+- `REPORT_URL`：可選。指定報表完整網址；未設定時會用目前 Worker origin 組出 `/reports`。
+
+部署注意：
+
+- 今天已重新 build，`dist/worker.js` 包含網頁報表與數字檢查更新。
+- Cloudflare Worker 手動部署時貼新版 `dist/worker.js`。
+
 ## 資料庫
 
 D1 tables：
@@ -154,5 +196,7 @@ schema 由 `src/db.js` 的 `ensureDatabaseSchema()` 建立。
 - 文字與圖片注單最後都要變成同一種標準注單格式。
 - AI 只做正規化，不做支數計算。
 - 支數計算由 `src/calculations.js` 負責。
+- 使用者可見的二、三、四玩法文案已改成 `二♥`、`三♥`、`四♥`，避免敏感字詞；內部 pick 仍維持 `2`、`3`、`4`。
+- 注單寫入 `parsed_entries` 前會檢查格式、號碼範圍與號重。
 - 圖片 OCR/AI 解析後，也走同一套 `parsed_entries` 流程。
 - AI 輸出在 eval 穩定前不能信任，LINE 正式流程必須保留 `ai_parse_results` 方便追查。

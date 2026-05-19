@@ -15,6 +15,8 @@
 - 寫入 D1，供今日注單與過往注單報表查詢。
 - 管理每位朋友的成本設定。
 
+注意：使用者可見文案目前以 `二♥`、`三♥`、`四♥` 顯示，避免敏感字詞；內部 deterministic calculation pick 仍是 `2`、`3`、`4`。
+
 ## 開發方式
 
 目前已改成「多檔開發、單檔輸出」。
@@ -43,6 +45,7 @@ Cloudflare Worker 要貼的是 `dist/worker.js` 的內容。
 - `src/aiParser.js`：呼叫 OpenAI，把文字/圖片注單正規化成標準 JSON。
 - `src/lineContent.js`：下載 LINE 圖片內容並轉 base64。
 - `src/reports.js`：注單報表與成本報表格式。
+- `src/webReport.js`：`/reports` 網頁每日總報表 HTML。
 - `src/lineReplies.js`：LINE text reply 與 Flex Message。
 - `src/costs.js`：成本輸入解析、成本 pending action 編碼/解碼。
 - `src/utils.js`：日期、白名單、數字格式工具。
@@ -61,6 +64,8 @@ Cloudflare Worker 要貼的是 `dist/worker.js` 的內容。
 
 `#朋友名`、`!注單報表:yyyy-MM-dd|朋友名` 等是 Flex Message 用的內部指令，不是人工輸入流程。
 
+成本管理子選單中的 `每日總報表` 按鈕目前會直接開啟 `/reports` 網頁報表。使用者仍可手動送出 `每日總報表` 觸發舊的 LINE 文字日期選單流程。
+
 ## 下單流程
 
 1. 使用者點 `選朋友下單`。
@@ -73,7 +78,8 @@ Cloudflare Worker 要貼的是 `dist/worker.js` 的內容。
 8. 圖片走 `downloadLineImage()` 後再 `parseOrderImageWithAI()`。
 9. AI 回傳標準 JSON，取出 normalized lines。
 10. normalized text 交給 `saveParsedEntriesForText()`。
-11. `src/calculations.js` 計算支數並寫入 `parsed_entries`。
+11. `src/calculations.js` 檢查格式、號碼範圍、號重，並計算支數。
+12. 寫入 `parsed_entries`；若該行驗證失敗，仍會寫入並在 `error_message` 記錄錯誤。
 
 ## D1 Tables
 
@@ -135,6 +141,18 @@ Cloudflare Worker 要貼的是 `dist/worker.js` 的內容。
 - 特定日期會進入 `pending_action = past_order_date`。
 - 使用者輸入 `yyyy-MM-dd` 後再選朋友。
 
+網頁每日總報表：
+
+- Worker route：`GET /reports`
+- 支援日期與朋友篩選。
+- 不選朋友時顯示該日期全部朋友。
+- 頁面頂部顯示全日總統計。
+- 每位朋友區塊先顯示朋友全部彩種加總。
+- 每位朋友底下依彩種分區，每個彩種有獨立統計。
+- 注單明細預設收起，可展開查看。
+- 可設定 `REPORT_ACCESS_TOKEN` 保護頁面；LINE 按鈕會自動帶 token。
+- 可設定 `REPORT_URL` 指定完整報表網址；未設定時用目前 Worker origin + `/reports`。
+
 報表示例：
 
 ```text
@@ -167,9 +185,9 @@ DEFAULT_COST_VALUES_BY_GAME = {
 
 四個數字依序是：
 
-- 二星成本
-- 三星成本
-- 四星成本
+- 二♥成本
+- 三♥成本
+- 四♥成本
 - 車組成本
 
 成本管理流程：
@@ -235,6 +253,19 @@ AI 的工作是輸出標準注單，不計算支數。
 ```
 
 因為 `01-39` 扣掉指定號碼。
+
+下注號碼檢查：
+
+- 號碼區只能使用數字、`x` 或 `.` 分隔。
+- 不允許連續分隔符、開頭/結尾分隔符。
+- 不允許同時混用 `x` 和 `.`。
+- 號碼必須兩位數一組。
+- 同一行注單不可重複號碼，跨排也會檢查。
+- 彩種範圍：
+  - `539`：`01-39`
+  - `大樂透`：`01-49`
+  - `港號`：`01-49`
+- 車組號碼也依彩種範圍檢查。
 
 ## AI Parser
 
@@ -391,19 +422,19 @@ fine-tune 成功且 eval 穩定後：
 目前所在分支：
 
 ```text
-對獎
+dev
 ```
 
 目前 HEAD：
 
 ```text
-78df960 完成對獎
+0d1c1d5 Merge branch '數字檢查' into dev
 ```
 
 `dev` 目前已與 `origin/dev` 對齊在：
 
 ```text
-2c0eccc Merge branch '計算總額' into dev
+0d1c1d5 Merge branch '數字檢查' into dev
 ```
 
 歷史中有 merge commit：
@@ -414,7 +445,20 @@ fine-tune 成功且 eval 穩定後：
 
 但它不是目前 HEAD。
 
-`對獎` 是本機功能分支，尚未 push。請使用者確認後再自行 push。
+今天已建立並 merge：
+
+- `網頁報表`：`896dd59 新增網頁報表與LINE入口`，merge commit `38b32a6`
+- `數字檢查`：`4ecbc4f 補下注號碼檢查`，merge commit `0d1c1d5`
+
+目前 `git stash list` 是空的。
+
+工作區仍有 `.DS_Store` 未提交變更；不要把它混進功能 commit。
+
+今天已跑：
+
+- `npm run check`
+- `npm run build`
+- `src/calculations.js` parser smoke tests
 
 另一個 Codex session 若要做主程式功能開發，建議另開分支，避免同時改 `src/main.js`、`src/aiParser.js`、`package.json`。例如：
 
