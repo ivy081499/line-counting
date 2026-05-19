@@ -60,9 +60,9 @@ export function buildCalculationReport(
   lines.push("加總");
   lines.push(
     [
-      `二${formatNumber(totals[2])}`,
-      `三${formatNumber(totals[3])}`,
-      `四${formatNumber(totals[4])}`,
+      `${formatPickLabel(2)}${formatNumber(totals[2])}`,
+      `${formatPickLabel(3)}${formatNumber(totals[3])}`,
+      `${formatPickLabel(4)}${formatNumber(totals[4])}`,
       `車${formatNumber(totals.car)}`,
     ].join(
       "、"
@@ -107,18 +107,18 @@ export function buildCostReport(friendName, costs) {
     lines.push(
       [
         "成本：",
-        `二${formatMoney(cost.star2_cost)}`,
-        `三${formatMoney(cost.star3_cost)}`,
-        `四${formatMoney(cost.star4_cost)}`,
+        `${formatPickLabel(2)}${formatMoney(cost.star2_cost)}`,
+        `${formatPickLabel(3)}${formatMoney(cost.star3_cost)}`,
+        `${formatPickLabel(4)}${formatMoney(cost.star4_cost)}`,
         `車${formatMoney(cost.car_cost)}`,
       ].join(" ")
     );
     lines.push(
       [
         "獎金：",
-        `二${formatMoney(cost.star2_prize)}`,
-        `三${formatMoney(cost.star3_prize)}`,
-        `四${formatMoney(cost.star4_prize)}`,
+        `${formatPickLabel(2)}${formatMoney(cost.star2_prize)}`,
+        `${formatPickLabel(3)}${formatMoney(cost.star3_prize)}`,
+        `${formatPickLabel(4)}${formatMoney(cost.star4_prize)}`,
         `車${formatMoney(cost.star2_prize)}`,
       ].join(" ")
     );
@@ -281,9 +281,9 @@ function formatEntryGameType(entry) {
 
 function formatAmountBreakdown(amounts) {
   return [
-    `二${formatMoney(amounts[2])}`,
-    `三${formatMoney(amounts[3])}`,
-    `四${formatMoney(amounts[4])}`,
+    `${formatPickLabel(2)}${formatMoney(amounts[2])}`,
+    `${formatPickLabel(3)}${formatMoney(amounts[3])}`,
+    `${formatPickLabel(4)}${formatMoney(amounts[4])}`,
     `車${formatMoney(amounts.car)}`,
   ].join("、");
 }

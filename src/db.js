@@ -849,6 +849,33 @@ export async function getFriendsWithOrdersByDate(db, dateText) {
   return result.results || [];
 }
 
+export async function getOrderDatesWithOrders(db, limit = 30) {
+  const result = await db
+    .prepare(
+      `
+      SELECT taipei_date
+      FROM (
+        SELECT date(raw_messages.created_at, '+8 hours') AS taipei_date
+        FROM raw_messages
+        WHERE raw_messages.friend_id IS NOT NULL
+
+        UNION
+
+        SELECT date(parsed_entries.created_at, '+8 hours') AS taipei_date
+        FROM parsed_entries
+        WHERE parsed_entries.friend_id IS NOT NULL
+      )
+      WHERE taipei_date IS NOT NULL
+      ORDER BY taipei_date DESC
+      LIMIT ?
+      `
+    )
+    .bind(limit)
+    .all();
+
+  return (result.results || []).map((row) => row.taipei_date);
+}
+
 function normalizeParsedEntryFromDb(row) {
   return {
     sourceLineText: row.source_line_text,

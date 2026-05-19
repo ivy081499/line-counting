@@ -35,6 +35,7 @@ import {
   getEditableRawMessagesByFriendAndDate,
   getFriendsWithOrdersByDate,
   getImageMessageCountByFriendAndDate,
+  getOrderDatesWithOrders,
   getOrCreateFriendCosts,
   getParsedEntriesByFriendAndDate,
   getRawMessageById,
@@ -72,13 +73,20 @@ import {
   replyWinningNumberGamePicker,
   replyWinningNumberInputPrompt,
 } from './lineReplies.js';
+import { buildWebReportForbiddenHtml, buildWebReportHtml } from './webReport.js';
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const reportUrl = buildReportUrl(url, env);
 
     if (url.pathname === "/") {
       return new Response("LINE helper is running");
+    }
+
+    if (url.pathname === "/reports" && request.method === "GET") {
+      await ensureDatabaseSchema(env.DB);
+      return await handleWebReportRequest(request, env);
     }
 
     if (url.pathname === "/line/webhook" && request.method === "POST") {
@@ -105,7 +113,7 @@ export default {
         }
 
         if (event.message.type === "text") {
-          await handleTextMessage(event, env, userId);
+          await handleTextMessage(event, env, userId, reportUrl);
           continue;
         }
 
@@ -128,7 +136,155 @@ export default {
   },
 };
 
-async function handleTextMessage(event, env, userId) {
+async function handleWebReportRequest(request, env) {
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token") || "";
+
+  if (env.REPORT_ACCESS_TOKEN && token !== env.REPORT_ACCESS_TOKEN) {
+    return htmlResponse(buildWebReportForbiddenHtml(), 403);
+  }
+
+  const requestedDate = url.searchParams.get("date") || getTaipeiDateString();
+  if (!isValidDateText(requestedDate)) {
+    return new Response("Invalid date. Use yyyy-MM-dd.", { status: 400 });
+  }
+
+  const selectedFriendId = parseOptionalPositiveInteger(
+    url.searchParams.get("friendId")
+  );
+  const dates = await getOrderDatesWithOrders(env.DB, 60);
+  const friends = await getFriendsWithOrdersByDate(env.DB, requestedDate);
+  const visibleFriends = selectedFriendId
+    ? friends.filter((friend) => friend.id === selectedFriendId)
+    : friends;
+  const winningNumbersByGameType = await getWinningNumbersByDate(
+    env,
+    requestedDate
+  );
+  const summaries = [];
+
+  for (const friend of visibleFriends) {
+    summaries.push(
+      await buildWebReportSummaryForFriend(
+        env,
+        friend,
+        requestedDate,
+        winningNumbersByGameType
+      )
+    );
+  }
+
+  return htmlResponse(
+    buildWebReportHtml({
+      dateText: requestedDate,
+      dates,
+      friends,
+      selectedFriendId,
+      summaries,
+      token,
+    })
+  );
+}
+
+async function buildWebReportSummaryForFriend(
+  env,
+  friend,
+  dateText,
+  winningNumbersByGameType
+) {
+  const entries = await getParsedEntriesByFriendAndDate(env.DB, friend.id, dateText);
+  const imageCount = await getImageMessageCountByFriendAndDate(
+    env.DB,
+    friend.id,
+    dateText
+  );
+  const { costs } = await getOrCreateFriendCosts(env.DB, friend.id);
+  const counts = { 2: 0, 3: 0, 4: 0, car: 0 };
+  const gameSummariesByType = {};
+  let betAmount = 0;
+  let prizeAmount = 0;
+
+  const enrichedEntries = entries.map((entry) => {
+    const gameType = entry.gameType || "539";
+    const gameSummary =
+      gameSummariesByType[gameType] ||
+      (gameSummariesByType[gameType] = {
+        gameType,
+        entries: [],
+        counts: { 2: 0, 3: 0, 4: 0, car: 0 },
+        betAmount: 0,
+        prizeAmount: 0,
+      });
+
+    for (const calculation of entry.calculations) {
+      if (counts[calculation.pick] !== undefined) {
+        counts[calculation.pick] += calculation.amount;
+        gameSummary.counts[calculation.pick] += calculation.amount;
+      }
+    }
+
+    const entryBetAmount = calculateEntryBetAmount(entry, costs);
+    const entryPrizeAmount = calculateEntryPrizeAmount(
+      entry,
+      costs,
+      winningNumbersByGameType
+    );
+
+    betAmount += entryBetAmount;
+    prizeAmount += entryPrizeAmount;
+
+    const enrichedEntry = {
+      ...entry,
+      betAmount: entryBetAmount,
+      prizeAmount: entryPrizeAmount,
+    };
+
+    gameSummary.entries.push(enrichedEntry);
+    gameSummary.betAmount += entryBetAmount;
+    gameSummary.prizeAmount += entryPrizeAmount;
+
+    return enrichedEntry;
+  });
+
+  return {
+    friend,
+    entries: enrichedEntries,
+    gameSummaries: Object.values(gameSummariesByType),
+    imageCount,
+    counts,
+    betAmount,
+    prizeAmount,
+  };
+}
+
+function parseOptionalPositiveInteger(value) {
+  if (!value) return null;
+
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
+function htmlResponse(body, status = 200) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function buildReportUrl(currentUrl, env) {
+  const reportUrl = new URL(env.REPORT_URL || "/reports", currentUrl.origin);
+
+  if (env.REPORT_ACCESS_TOKEN && !reportUrl.searchParams.has("token")) {
+    reportUrl.searchParams.set("token", env.REPORT_ACCESS_TOKEN);
+  }
+
+  return reportUrl.toString();
+}
+
+async function handleTextMessage(event, env, userId, reportUrl) {
   const text = event.message.text.trim();
 
   if (text === COMMANDS.ADD_FRIEND) {
@@ -142,7 +298,7 @@ async function handleTextMessage(event, env, userId) {
     return;
   }
 
-  if (await handleRichMenuCommand(event, env, userId, text, session)) {
+  if (await handleRichMenuCommand(event, env, userId, text, session, reportUrl)) {
     return;
   }
 
@@ -346,7 +502,7 @@ async function handleInternalTextCommand(event, env, userId, text, session) {
   return false;
 }
 
-async function handleRichMenuCommand(event, env, userId, text, session) {
+async function handleRichMenuCommand(event, env, userId, text, session, reportUrl) {
   if (text === COMMANDS.SELECT_FRIEND_FOR_BET) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
     await handleSelectFriendCommand(event, env);
@@ -391,7 +547,7 @@ async function handleRichMenuCommand(event, env, userId, text, session) {
 
   if (text === COMMANDS.COST_MANAGEMENT) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
-    await handleCostManagementCommand(event, env);
+    await handleCostManagementCommand(event, env, reportUrl);
     return true;
   }
 
@@ -809,8 +965,12 @@ async function handleOrderReportForFriendName(event, env, dateText, friendName) 
   await replyMessage(event.replyToken, report, env.LINE_CHANNEL_ACCESS_TOKEN);
 }
 
-async function handleCostManagementCommand(event, env) {
-  await replyCostManagementMenu(event.replyToken, env.LINE_CHANNEL_ACCESS_TOKEN);
+async function handleCostManagementCommand(event, env, reportUrl) {
+  await replyCostManagementMenu(
+    event.replyToken,
+    env.LINE_CHANNEL_ACCESS_TOKEN,
+    reportUrl
+  );
 }
 
 async function handleFriendCostManagementCommand(event, env) {

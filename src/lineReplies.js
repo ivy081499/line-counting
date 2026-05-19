@@ -614,7 +614,11 @@ export async function replyCostManagementFriendPicker(
   });
 }
 
-export async function replyCostManagementMenu(replyToken, channelAccessToken) {
+export async function replyCostManagementMenu(
+  replyToken,
+  channelAccessToken,
+  reportUrl
+) {
   await replyButtonMenu(replyToken, channelAccessToken, {
     altText: "成本管理",
     title: "成本管理",
@@ -644,9 +648,11 @@ export async function replyCostManagementMenu(replyToken, channelAccessToken) {
         type: "button",
         style: "secondary",
         action: {
-          type: "message",
+          type: reportUrl ? "uri" : "message",
           label: "每日總報表",
-          text: COMMANDS.DAILY_TOTAL_REPORT,
+          ...(reportUrl
+            ? { uri: reportUrl }
+            : { text: COMMANDS.DAILY_TOTAL_REPORT }),
         },
       },
     ],
@@ -768,7 +774,7 @@ export async function replyCostInputPrompt(
     },
     {
       type: "text",
-      text: "七個數字請用逗號串接，依序代表二星成本、三星成本、四星成本、車組成本、二星獎金、三星獎金、四星獎金。",
+      text: "七個數字請用逗號串接，依序代表二♥成本、三♥成本、四♥成本、車組成本、二♥獎金、三♥獎金、四♥獎金。",
       size: "sm",
       color: "#666666",
       wrap: true,

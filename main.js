@@ -304,9 +304,9 @@ function parseEditOrderPendingAction(pendingAction) {
 function formatPickLabel(pick) {
   const labels = {
     1: "一",
-    2: "二",
-    3: "三",
-    4: "四",
+    2: "二♥",
+    3: "三♥",
+    4: "四♥",
     5: "五",
     6: "六",
     7: "七",
@@ -432,9 +432,9 @@ function buildCalculationReport(friendName, entries, imageCount = 0, dateText = 
   lines.push("加總");
   lines.push(
     [
-      `二${formatNumber(totals[2])}`,
-      `三${formatNumber(totals[3])}`,
-      `四${formatNumber(totals[4])}`,
+      `${formatPickLabel(2)}${formatNumber(totals[2])}`,
+      `${formatPickLabel(3)}${formatNumber(totals[3])}`,
+      `${formatPickLabel(4)}${formatNumber(totals[4])}`,
       `車${formatNumber(totals.car)}`
     ].join(
       "、"
@@ -470,18 +470,18 @@ function buildCostReport(friendName, costs) {
     lines.push(
       [
         "成本：",
-        `二${formatMoney(cost.star2_cost)}`,
-        `三${formatMoney(cost.star3_cost)}`,
-        `四${formatMoney(cost.star4_cost)}`,
+        `${formatPickLabel(2)}${formatMoney(cost.star2_cost)}`,
+        `${formatPickLabel(3)}${formatMoney(cost.star3_cost)}`,
+        `${formatPickLabel(4)}${formatMoney(cost.star4_cost)}`,
         `車${formatMoney(cost.car_cost)}`
       ].join(" ")
     );
     lines.push(
       [
         "獎金：",
-        `二${formatMoney(cost.star2_prize)}`,
-        `三${formatMoney(cost.star3_prize)}`,
-        `四${formatMoney(cost.star4_prize)}`,
+        `${formatPickLabel(2)}${formatMoney(cost.star2_prize)}`,
+        `${formatPickLabel(3)}${formatMoney(cost.star3_prize)}`,
+        `${formatPickLabel(4)}${formatMoney(cost.star4_prize)}`,
         `車${formatMoney(cost.star2_prize)}`
       ].join(" ")
     );
@@ -601,9 +601,9 @@ function formatEntryGameType(entry) {
 }
 function formatAmountBreakdown(amounts) {
   return [
-    `二${formatMoney(amounts[2])}`,
-    `三${formatMoney(amounts[3])}`,
-    `四${formatMoney(amounts[4])}`,
+    `${formatPickLabel(2)}${formatMoney(amounts[2])}`,
+    `${formatPickLabel(3)}${formatMoney(amounts[3])}`,
+    `${formatPickLabel(4)}${formatMoney(amounts[4])}`,
     `車${formatMoney(amounts.car)}`
   ].join("、");
 }
@@ -1424,6 +1424,28 @@ async function getFriendsWithOrdersByDate(db, dateText) {
   ).bind(dateText, dateText).all();
   return result.results || [];
 }
+async function getOrderDatesWithOrders(db, limit = 30) {
+  const result = await db.prepare(
+    `
+      SELECT taipei_date
+      FROM (
+        SELECT date(raw_messages.created_at, '+8 hours') AS taipei_date
+        FROM raw_messages
+        WHERE raw_messages.friend_id IS NOT NULL
+
+        UNION
+
+        SELECT date(parsed_entries.created_at, '+8 hours') AS taipei_date
+        FROM parsed_entries
+        WHERE parsed_entries.friend_id IS NOT NULL
+      )
+      WHERE taipei_date IS NOT NULL
+      ORDER BY taipei_date DESC
+      LIMIT ?
+      `
+  ).bind(limit).all();
+  return (result.results || []).map((row) => row.taipei_date);
+}
 function normalizeParsedEntryFromDb(row) {
   return {
     sourceLineText: row.source_line_text,
@@ -1985,7 +2007,7 @@ async function replyCostManagementFriendPicker(replyToken, friends, channelAcces
     buttons
   });
 }
-async function replyCostManagementMenu(replyToken, channelAccessToken) {
+async function replyCostManagementMenu(replyToken, channelAccessToken, reportUrl) {
   await replyButtonMenu(replyToken, channelAccessToken, {
     altText: "成本管理",
     title: "成本管理",
@@ -2015,9 +2037,9 @@ async function replyCostManagementMenu(replyToken, channelAccessToken) {
         type: "button",
         style: "secondary",
         action: {
-          type: "message",
+          type: reportUrl ? "uri" : "message",
           label: "每日總報表",
-          text: COMMANDS.DAILY_TOTAL_REPORT
+          ...reportUrl ? { uri: reportUrl } : { text: COMMANDS.DAILY_TOTAL_REPORT }
         }
       }
     ]
@@ -2123,7 +2145,7 @@ async function replyCostInputPrompt(replyToken, friendName, gameType, channelAcc
     },
     {
       type: "text",
-      text: "七個數字請用逗號串接，依序代表二星成本、三星成本、四星成本、車組成本、二星獎金、三星獎金、四星獎金。",
+      text: "七個數字請用逗號串接，依序代表二♥成本、三♥成本、四♥成本、車組成本、二♥獎金、三♥獎金、四♥獎金。",
       size: "sm",
       color: "#666666",
       wrap: true
@@ -2265,12 +2287,450 @@ async function replyDailyReportDateMenu(replyToken, channelAccessToken) {
   });
 }
 
+// src/webReport.js
+function buildWebReportHtml({
+  dateText,
+  dates,
+  friends,
+  selectedFriendId,
+  summaries,
+  token
+}) {
+  const selectedFriend = friends.find((friend) => friend.id === selectedFriendId);
+  const pageTitle = selectedFriend ? `${selectedFriend.name} ${dateText} 網頁報表` : `${dateText} 每日總報表`;
+  const totals = summarizeReportTotals(summaries);
+  return `<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(pageTitle)}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f8;
+      --panel: #ffffff;
+      --ink: #17202a;
+      --muted: #667085;
+      --line: #d8dee4;
+      --accent: #146c5c;
+      --accent-soft: #e6f3ef;
+      --danger: #b42318;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    .wrap {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+    .top {
+      padding: 22px 0 18px;
+      display: grid;
+      gap: 14px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+    form.controls {
+      display: grid;
+      grid-template-columns: minmax(0, 220px) minmax(0, 260px) auto;
+      gap: 10px;
+      align-items: end;
+    }
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    input,
+    select,
+    button {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      padding: 8px 10px;
+    }
+    button {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      padding-inline: 18px;
+    }
+    main {
+      padding: 18px 0 32px;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 13px;
+    }
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 21px;
+      line-height: 1.2;
+    }
+    .friend-report {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-top: 14px;
+      overflow: hidden;
+    }
+    .friend-head {
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+    .friend-head h2 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    .friend-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .amount {
+      text-align: right;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+    .game-section {
+      border-top: 1px solid var(--line);
+      background: #fff;
+    }
+    .game-head {
+      padding: 12px 16px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      background: #fff;
+    }
+    .game-head h3 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+    .game-head p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .game-amount {
+      text-align: right;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    details.entries-toggle {
+      border-top: 0;
+    }
+    details.entries-toggle > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 16px;
+      cursor: pointer;
+      color: var(--accent);
+      font-weight: 700;
+      list-style: none;
+      background: #fff;
+    }
+    details.entries-toggle > summary::-webkit-details-marker {
+      display: none;
+    }
+    details.entries-toggle > summary::after {
+      content: "展開";
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    details.entries-toggle[open] > summary::after {
+      content: "收起";
+    }
+    .table-scroll {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      background: #fbfcfd;
+    }
+    tr:last-child td {
+      border-bottom: 0;
+    }
+    .source {
+      min-width: 260px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .tag {
+      display: inline-block;
+      margin: 0 4px 4px 0;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .error {
+      color: var(--danger);
+      font-weight: 700;
+    }
+    .empty {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      color: var(--muted);
+    }
+    @media (max-width: 760px) {
+      .wrap {
+        width: min(100% - 20px, 1120px);
+      }
+      form.controls,
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+      .friend-head {
+        grid-template-columns: 1fr;
+      }
+      .game-head {
+        grid-template-columns: 1fr;
+      }
+      .amount {
+        margin-top: 8px;
+        text-align: left;
+      }
+      .game-amount {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap top">
+      <h1>${escapeHtml(pageTitle)}</h1>
+      <form class="controls" method="get" action="/reports">
+        ${token ? `<input type="hidden" name="token" value="${escapeAttribute(token)}">` : ""}
+        <label>
+          日期
+          <input type="date" name="date" value="${escapeAttribute(dateText)}" required>
+        </label>
+        <label>
+          朋友
+          <select name="friendId">
+            <option value="">全部朋友</option>
+            ${friends.map((friend) => `<option value="${friend.id}"${friend.id === selectedFriendId ? " selected" : ""}>${escapeHtml(friend.name)}</option>`).join("")}
+          </select>
+        </label>
+        <button type="submit">查看</button>
+      </form>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      ${renderTopSummary(totals)}
+      ${summaries.length === 0 ? `<div class="empty">${escapeHtml(dateText)} 沒有注單資料。</div>` : summaries.map(renderFriendReport).join("")}
+    </div>
+  </main>
+</body>
+</html>`;
+}
+function buildWebReportForbiddenHtml() {
+  return `<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>無法查看報表</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f6f7f8; color: #17202a; }
+    main { width: min(560px, calc(100% - 32px)); margin: 64px auto; background: #fff; border: 1px solid #d8dee4; border-radius: 8px; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: 0; }
+    p { margin: 0; color: #667085; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>無法查看報表</h1>
+    <p>這個報表連結缺少有效的授權 token。</p>
+  </main>
+</body>
+</html>`;
+}
+function renderTopSummary(totals) {
+  return `<section class="summary-grid" aria-label="總覽">
+    ${renderMetric("朋友數", totals.friendCount)}
+    ${renderMetric("下注總額", formatMoney2(totals.betAmount))}
+    ${renderMetric("中獎金額", formatMoney2(totals.prizeAmount))}
+    ${renderMetric("差額", formatMoney2(totals.betAmount - totals.prizeAmount))}
+  </section>`;
+}
+function renderMetric(label, value) {
+  return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`;
+}
+function renderFriendReport(summary) {
+  return `<section class="friend-report">
+    <div class="friend-head">
+      <div>
+        <h2>${escapeHtml(summary.friend.name)}</h2>
+        <p>全部統計：${renderCountSummary(summary.counts)}${summary.imageCount > 0 ? `，圖片 ${summary.imageCount} 筆尚未解析` : ""}</p>
+      </div>
+      <div class="amount">
+        下注 ${formatMoney2(summary.betAmount)}<br>
+        中獎 ${formatMoney2(summary.prizeAmount)}<br>
+        差額 ${formatMoney2(summary.betAmount - summary.prizeAmount)}
+      </div>
+    </div>
+    ${summary.gameSummaries.map(renderGameSection).join("") || `<div class="empty">沒有可計算的文字資料。</div>`}
+  </section>`;
+}
+function renderGameSection(gameSummary) {
+  return `<section class="game-section">
+    <div class="game-head">
+      <div>
+        <h3>${escapeHtml(gameSummary.gameType)}</h3>
+        <p>${renderCountSummary(gameSummary.counts)}</p>
+      </div>
+      <div class="game-amount">
+        下注 ${formatMoney2(gameSummary.betAmount)}<br>
+        中獎 ${formatMoney2(gameSummary.prizeAmount)}<br>
+        差額 ${formatMoney2(gameSummary.betAmount - gameSummary.prizeAmount)}
+      </div>
+    </div>
+    <details class="entries-toggle">
+      <summary>${escapeHtml(gameSummary.gameType)} 注單內容 ${gameSummary.entries.length} 筆</summary>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>注單</th>
+              <th>彩種</th>
+              <th>支數</th>
+              <th>下注</th>
+              <th>中獎</th>
+              <th>狀態</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${gameSummary.entries.map((entry, index) => renderEntryRow(entry, index)).join("") || `<tr><td colspan="7">沒有可計算的文字資料。</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </section>`;
+}
+function renderEntryRow(entry, index) {
+  const calculations = entry.calculations.map((calculation) => `<span class="tag">${escapeHtml(formatPickLabel(calculation.pick))}${escapeHtml(formatNumber(calculation.amount))}</span>`).join("");
+  const status = entry.errorMessage ? `<span class="error">${escapeHtml(entry.errorMessage)}</span>` : "已計算";
+  return `<tr>
+    <td>${index + 1}</td>
+    <td class="source">${escapeHtml(entry.sourceLineText)}</td>
+    <td>${escapeHtml(entry.gameType || "539")}</td>
+    <td>${calculations || "-"}</td>
+    <td>${formatMoney2(entry.betAmount || 0)}</td>
+    <td>${formatMoney2(entry.prizeAmount || 0)}</td>
+    <td>${status}</td>
+  </tr>`;
+}
+function renderCountSummary(counts) {
+  return [
+    `${formatPickLabel(2)}${formatNumber(counts[2])}`,
+    `${formatPickLabel(3)}${formatNumber(counts[3])}`,
+    `${formatPickLabel(4)}${formatNumber(counts[4])}`,
+    `車${formatNumber(counts.car)}`
+  ].join("、");
+}
+function summarizeReportTotals(summaries) {
+  return summaries.reduce(
+    (totals, summary) => ({
+      friendCount: totals.friendCount + 1,
+      betAmount: totals.betAmount + summary.betAmount,
+      prizeAmount: totals.prizeAmount + summary.prizeAmount
+    }),
+    { friendCount: 0, betAmount: 0, prizeAmount: 0 }
+  );
+}
+function formatMoney2(value) {
+  return formatNumberWithCommas(value || 0);
+}
+function escapeHtml(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
+
 // src/main.js
 var main_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const reportUrl = buildReportUrl(url, env);
     if (url.pathname === "/") {
       return new Response("LINE helper is running");
+    }
+    if (url.pathname === "/reports" && request.method === "GET") {
+      await ensureDatabaseSchema(env.DB);
+      return await handleWebReportRequest(request, env);
     }
     if (url.pathname === "/line/webhook" && request.method === "POST") {
       const body = await request.json();
@@ -2291,7 +2751,7 @@ var main_default = {
           continue;
         }
         if (event.message.type === "text") {
-          await handleTextMessage(event, env, userId);
+          await handleTextMessage(event, env, userId, reportUrl);
           continue;
         }
         if (event.message.type === "image") {
@@ -2309,7 +2769,125 @@ var main_default = {
     return new Response("Not found", { status: 404 });
   }
 };
-async function handleTextMessage(event, env, userId) {
+async function handleWebReportRequest(request, env) {
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token") || "";
+  if (env.REPORT_ACCESS_TOKEN && token !== env.REPORT_ACCESS_TOKEN) {
+    return htmlResponse(buildWebReportForbiddenHtml(), 403);
+  }
+  const requestedDate = url.searchParams.get("date") || getTaipeiDateString();
+  if (!isValidDateText(requestedDate)) {
+    return new Response("Invalid date. Use yyyy-MM-dd.", { status: 400 });
+  }
+  const selectedFriendId = parseOptionalPositiveInteger(
+    url.searchParams.get("friendId")
+  );
+  const dates = await getOrderDatesWithOrders(env.DB, 60);
+  const friends = await getFriendsWithOrdersByDate(env.DB, requestedDate);
+  const visibleFriends = selectedFriendId ? friends.filter((friend) => friend.id === selectedFriendId) : friends;
+  const winningNumbersByGameType = await getWinningNumbersByDate(
+    env,
+    requestedDate
+  );
+  const summaries = [];
+  for (const friend of visibleFriends) {
+    summaries.push(
+      await buildWebReportSummaryForFriend(
+        env,
+        friend,
+        requestedDate,
+        winningNumbersByGameType
+      )
+    );
+  }
+  return htmlResponse(
+    buildWebReportHtml({
+      dateText: requestedDate,
+      dates,
+      friends,
+      selectedFriendId,
+      summaries,
+      token
+    })
+  );
+}
+async function buildWebReportSummaryForFriend(env, friend, dateText, winningNumbersByGameType) {
+  const entries = await getParsedEntriesByFriendAndDate(env.DB, friend.id, dateText);
+  const imageCount = await getImageMessageCountByFriendAndDate(
+    env.DB,
+    friend.id,
+    dateText
+  );
+  const { costs } = await getOrCreateFriendCosts(env.DB, friend.id);
+  const counts = { 2: 0, 3: 0, 4: 0, car: 0 };
+  const gameSummariesByType = {};
+  let betAmount = 0;
+  let prizeAmount = 0;
+  const enrichedEntries = entries.map((entry) => {
+    const gameType = entry.gameType || "539";
+    const gameSummary = gameSummariesByType[gameType] || (gameSummariesByType[gameType] = {
+      gameType,
+      entries: [],
+      counts: { 2: 0, 3: 0, 4: 0, car: 0 },
+      betAmount: 0,
+      prizeAmount: 0
+    });
+    for (const calculation of entry.calculations) {
+      if (counts[calculation.pick] !== void 0) {
+        counts[calculation.pick] += calculation.amount;
+        gameSummary.counts[calculation.pick] += calculation.amount;
+      }
+    }
+    const entryBetAmount = calculateEntryBetAmount(entry, costs);
+    const entryPrizeAmount = calculateEntryPrizeAmount(
+      entry,
+      costs,
+      winningNumbersByGameType
+    );
+    betAmount += entryBetAmount;
+    prizeAmount += entryPrizeAmount;
+    const enrichedEntry = {
+      ...entry,
+      betAmount: entryBetAmount,
+      prizeAmount: entryPrizeAmount
+    };
+    gameSummary.entries.push(enrichedEntry);
+    gameSummary.betAmount += entryBetAmount;
+    gameSummary.prizeAmount += entryPrizeAmount;
+    return enrichedEntry;
+  });
+  return {
+    friend,
+    entries: enrichedEntries,
+    gameSummaries: Object.values(gameSummariesByType),
+    imageCount,
+    counts,
+    betAmount,
+    prizeAmount
+  };
+}
+function parseOptionalPositiveInteger(value) {
+  if (!value) return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+function htmlResponse(body, status = 200) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store"
+    }
+  });
+}
+function buildReportUrl(currentUrl, env) {
+  const reportUrl = new URL(env.REPORT_URL || "/reports", currentUrl.origin);
+  if (env.REPORT_ACCESS_TOKEN && !reportUrl.searchParams.has("token")) {
+    reportUrl.searchParams.set("token", env.REPORT_ACCESS_TOKEN);
+  }
+  return reportUrl.toString();
+}
+async function handleTextMessage(event, env, userId, reportUrl) {
   const text = event.message.text.trim();
   if (text === COMMANDS.ADD_FRIEND) {
     await handleAddFriendCommand(event, env, userId);
@@ -2319,7 +2897,7 @@ async function handleTextMessage(event, env, userId) {
   if (await handleInternalTextCommand(event, env, userId, text, session)) {
     return;
   }
-  if (await handleRichMenuCommand(event, env, userId, text, session)) {
+  if (await handleRichMenuCommand(event, env, userId, text, session, reportUrl)) {
     return;
   }
   if (session?.pending_action === PENDING_ACTIONS.ADD_FRIEND) {
@@ -2474,7 +3052,7 @@ async function handleInternalTextCommand(event, env, userId, text, session) {
   }
   return false;
 }
-async function handleRichMenuCommand(event, env, userId, text, session) {
+async function handleRichMenuCommand(event, env, userId, text, session, reportUrl) {
   if (text === COMMANDS.SELECT_FRIEND_FOR_BET) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
     await handleSelectFriendCommand(event, env);
@@ -2512,7 +3090,7 @@ async function handleRichMenuCommand(event, env, userId, text, session) {
   }
   if (text === COMMANDS.COST_MANAGEMENT) {
     await clearPendingActionIfNeeded(env.DB, userId, session);
-    await handleCostManagementCommand(event, env);
+    await handleCostManagementCommand(event, env, reportUrl);
     return true;
   }
   if (text === COMMANDS.FRIEND_COST_MANAGEMENT) {
@@ -2874,8 +3452,12 @@ async function handleOrderReportForFriendName(event, env, dateText, friendName) 
   );
   await replyMessage(event.replyToken, report, env.LINE_CHANNEL_ACCESS_TOKEN);
 }
-async function handleCostManagementCommand(event, env) {
-  await replyCostManagementMenu(event.replyToken, env.LINE_CHANNEL_ACCESS_TOKEN);
+async function handleCostManagementCommand(event, env, reportUrl) {
+  await replyCostManagementMenu(
+    event.replyToken,
+    env.LINE_CHANNEL_ACCESS_TOKEN,
+    reportUrl
+  );
 }
 async function handleFriendCostManagementCommand(event, env) {
   const friends = await getFriends(env.DB);
