@@ -676,7 +676,7 @@ export async function replyCostActionMenu(replyToken, friend, channelAccessToken
   await replyButtonMenu(replyToken, channelAccessToken, {
     altText: `成本與獎金：${friend.name}`,
     title: `${friend.name} 成本與獎金`,
-    description: "可查看或編輯 539、大樂透、港號的下注成本與中獎金額。",
+    description: "可查看或編輯 539 的下注成本與中獎金額。",
     buttons: [
       {
         type: "button",

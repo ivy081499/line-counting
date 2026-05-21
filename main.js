@@ -44,22 +44,26 @@ var PENDING_ACTIONS = {
   WINNING_NUMBER_INPUT_PREFIX: "winning_number_input:",
   DAILY_REPORT_DATE: "daily_report_date"
 };
-var COST_GAME_TYPES = ["539", "大樂透", "港號"];
+var COST_GAME_TYPES = [
+  "539"
+  // "大樂透",
+  // "港號",
+];
 var DEFAULT_CAR_GAME_MAX_NUMBER = 39;
 var GAME_NUMBER_MAX_BY_TYPE = {
-  "539": 39,
-  "大樂透": 49,
-  "港號": 49
+  "539": 39
+  // "大樂透": 49,
+  // "港號": 49,
 };
 var DEFAULT_COST_VALUES_BY_GAME = {
-  "539": [70, 75, 80, 70],
-  "大樂透": [70, 75, 80, 70],
-  "港號": [70, 75, 80, 70]
+  "539": [70, 75, 80, 70]
+  // "大樂透": [70, 75, 80, 70],
+  // "港號": [70, 75, 80, 70],
 };
 var DEFAULT_PRIZE_VALUES_BY_GAME = {
-  "539": [5300, 57e3, 75e4],
-  "大樂透": [5300, 57e3, 75e4],
-  "港號": [5300, 57e3, 75e4]
+  "539": [5300, 57e3, 75e4]
+  // "大樂透": [5300, 57000, 750000],
+  // "港號": [5300, 57000, 750000],
 };
 var DEFAULT_COST_ROWS = COST_GAME_TYPES.map(
   (gameType) => {
@@ -1071,8 +1075,8 @@ async function getFriendCosts(db, friendId) {
       ORDER BY
         CASE game_type
           WHEN '539' THEN 1
-          WHEN '大樂透' THEN 2
-          WHEN '港號' THEN 3
+          -- WHEN '大樂透' THEN 2
+          -- WHEN '港號' THEN 3
           ELSE 4
         END
       `
@@ -2114,7 +2118,7 @@ async function replyCostActionMenu(replyToken, friend, channelAccessToken) {
   await replyButtonMenu(replyToken, channelAccessToken, {
     altText: `成本與獎金：${friend.name}`,
     title: `${friend.name} 成本與獎金`,
-    description: "可查看或編輯 539、大樂透、港號的下注成本與中獎金額。",
+    description: "可查看或編輯 539 的下注成本與中獎金額。",
     buttons: [
       {
         type: "button",

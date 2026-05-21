@@ -1,0 +1,101 @@
+{
+  "id": "image-584856",
+  "type": "image",
+  "image": {
+    "path": "../../images/584856.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "092133 二x0.25 三x1.5",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "152535 二x0.5 三x3",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "040809212633 三x0.05 四x0.05",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "152535092133 三x0.05 四x0.05",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "040809141516 三x0.025 四x0.025",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "010203121838 三x0.025 四x0.025",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "011011142123 三x0.025 四x0.025",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "010910112133 三x0.025 四x0.025",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0509152535 三x0.05 四x0.15",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0916192526 三x0.05 四x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0817182122 三x0.05 四x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0408092133 三x0.1 四x0.5",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "05152535 三x0.25",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "06162636 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "091521253335 三x0.05 四x0.05",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "092133 二x0.25 三x0.25",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "152535 二x0.25 三x0.25",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "011011 二x0.25 三x0.25",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

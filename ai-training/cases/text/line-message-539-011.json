@@ -1,0 +1,13 @@
+{
+  "id": "text-line-message-539-011",
+  "type": "text",
+  "input": "539=01-05-13-26-28=2-3-4×0.2",
+  "lines": [
+    {
+      "original": "539=01-05-13-26-28=2-3-4×0.2",
+      "normalized": "0105132628 二x0.2 三x0.2 四x0.2",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}
