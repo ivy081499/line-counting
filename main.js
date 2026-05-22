@@ -4117,6 +4117,7 @@ async function parseAndSaveOrderText(env, message) {
       status: "fallback",
       parsedCount: countSuccessfulEntries(entries),
       errorCount: countFailedEntries(entries),
+      entryErrors: buildEntryErrorMessages(entries),
       warnings: ["尚未設定 OPENAI_API_KEY，已用原始文字直接解析。"]
     };
   }
@@ -4139,6 +4140,7 @@ async function parseAndSaveOrderText(env, message) {
       status: "fallback",
       parsedCount: countSuccessfulEntries(entries),
       errorCount: countFailedEntries(entries),
+      entryErrors: buildEntryErrorMessages(entries),
       warnings: [`AI 解析失敗，已改用原始文字直接解析：${error.message}`]
     };
   }
@@ -4202,6 +4204,7 @@ async function saveAIParseResultAndEntries(env, message, aiResult) {
     status,
     parsedCount: countSuccessfulEntries(entries),
     errorCount: countFailedEntries(entries),
+    entryErrors: buildEntryErrorMessages(entries),
     warnings: aiResult.warnings
   };
 }
@@ -4212,6 +4215,9 @@ function buildOrderReceivedMessage(friendName, parseResult) {
   }
   if (parseResult.errorCount > 0) {
     lines.push(`有 ${parseResult.errorCount} 行格式仍需確認。`);
+    if (parseResult.entryErrors?.length > 0) {
+      lines.push(...parseResult.entryErrors.slice(0, 5));
+    }
   }
   if (parseResult.parsedCount === 0 && parseResult.errorCount === 0) {
     lines.push("目前沒有可計算的注單行。");
@@ -4228,6 +4234,9 @@ function countSuccessfulEntries(entries = []) {
 }
 function countFailedEntries(entries = []) {
   return entries.filter((entry) => entry.errorMessage).length;
+}
+function buildEntryErrorMessages(entries = []) {
+  return entries.filter((entry) => entry.errorMessage).map((entry) => `${entry.sourceLineText}：${entry.errorMessage}`);
 }
 export {
   main_default as default
