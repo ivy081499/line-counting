@@ -298,8 +298,8 @@ export async function getFriendCosts(db, friendId) {
       ORDER BY
         CASE game_type
           WHEN '539' THEN 1
-          WHEN '大樂透' THEN 2
-          WHEN '港號' THEN 3
+          -- WHEN '大樂透' THEN 2
+          -- WHEN '港號' THEN 3
           ELSE 4
         END
       `

@@ -1,0 +1,26 @@
+{
+  "id": "image-584848",
+  "type": "image",
+  "image": {
+    "path": "../../images/584848.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "0921273339 三x0.2 四x0.5",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "092133 二x1 三x5",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "09x0.3車",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

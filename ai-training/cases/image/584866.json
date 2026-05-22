@@ -1,0 +1,36 @@
+{
+  "id": "image-584866",
+  "type": "image",
+  "image": {
+    "path": "../../images/584866.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "1121142924 二x1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "29x0.1車",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "11x0.1車",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "21x0.1車",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "14x0.1車",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

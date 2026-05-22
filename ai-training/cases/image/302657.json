@@ -1,0 +1,51 @@
+{
+  "id": "image-302657",
+  "type": "image",
+  "image": {
+    "path": "../../images/302657.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "0617x0231x052535 二x1 三x2",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "1127x2935x0232 二x2 三x2",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "02x27x29x2535x1131 二x1 三x1 四x1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "020625102731 三x1 四x1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "27283132 二x2 三x2 四x2",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0602293527 二x1 三x1 四x1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "03071127 二x2 三x2 四x2",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "19222532 二x2 三x2 四x2",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

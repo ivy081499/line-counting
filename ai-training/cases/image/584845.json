@@ -1,0 +1,111 @@
+{
+  "id": "image-584845",
+  "type": "image",
+  "image": {
+    "path": "../../images/584845.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    {
+      "original": "",
+      "normalized": "09x0.3車",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "07081018203428 三x0.025 四x0.025",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "092127313339 三x0.05 四x0.05",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0921273133 三x0.05 四x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0708202834 三x0.05 四x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0921273339 三x0.05 四x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0921293334 三x0.1 四x0.25",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "09102133 三x0.1",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "092133 二x0.5 三x5",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "0910 二x0.5",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "01112131 三x0.4",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "02122232 三x0.4",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "03132333 三x0.4",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "04142434 三x0.4",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "05152535 三x0.4",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "06162636 三x0.4",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "07172737 三x0.4",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "08182838 三x0.4",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "09192939 三x0.4",
+      "confidence": 0.95
+    },
+    {
+      "original": "",
+      "normalized": "102030 三x0.4",
+      "confidence": 0.95
+    }
+  ],
+  "warnings": []
+}

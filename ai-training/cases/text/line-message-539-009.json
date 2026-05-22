@@ -1,0 +1,28 @@
+{
+  "id": "text-line-message-539-009",
+  "type": "text",
+  "input": "539=09-12-18-28-32=2-3×0.5\n28/38各0.5車\n4尾*8尾\n二星*3",
+  "lines": [
+    {
+      "original": "539=09-12-18-28-32=2-3×0.5",
+      "normalized": "0912182832 二x0.5 三x0.5",
+      "confidence": 0.99
+    },
+    {
+      "original": "28/38各0.5車",
+      "normalized": "28x0.5車",
+      "confidence": 0.99
+    },
+    {
+      "original": "28/38各0.5車",
+      "normalized": "38x0.5車",
+      "confidence": 0.99
+    },
+    {
+      "original": "4尾*8尾 / 二星*3",
+      "normalized": "04142434x08182838 二x3",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

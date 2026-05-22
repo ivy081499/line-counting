@@ -1,0 +1,23 @@
+{
+  "id": "text-line-message-539-012",
+  "type": "text",
+  "input": "539=04-13-15-21-36=2-3×0.5\n01/04/07\n二三*1\n01*0.3車",
+  "lines": [
+    {
+      "original": "539=04-13-15-21-36=2-3×0.5",
+      "normalized": "0413152136 二x0.5 三x0.5",
+      "confidence": 0.99
+    },
+    {
+      "original": "01/04/07 / 二三*1",
+      "normalized": "010407 二x1 三x1",
+      "confidence": 0.99
+    },
+    {
+      "original": "01*0.3車",
+      "normalized": "01x0.3車",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

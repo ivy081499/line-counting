@@ -1,0 +1,18 @@
+{
+  "id": "image-584806",
+  "type": "image",
+  "image": { "path": "../../images/584806.jpg", "detail": "high" },
+  "lines": [
+    { "original": "", "normalized": "08172826 二x1 三x1 四x1", "confidence": 0.95 },
+    { "original": "", "normalized": "24283237 二x1 三x1", "confidence": 0.95 },
+    { "original": "", "normalized": "02142338 二x1 三x1", "confidence": 0.95 },
+    { "original": "", "normalized": "08283738 二x1 三x1 四x1", "confidence": 0.95 },
+    { "original": "", "normalized": "03031320 二x1 三x1 四x1", "confidence": 0.95 },
+    { "original": "", "normalized": "03082635 二x1 三x1 四x1", "confidence": 0.95 },
+    { "original": "", "normalized": "03092628 二x1 三x1 四x1", "confidence": 0.95 },
+    { "original": "", "normalized": "0313x2127x121636 二x1 三x1", "confidence": 0.95 }
+  ],
+  "warnings": [
+    "03031320 號碼重複，需提示使用者且不可計算。"
+  ]
+}

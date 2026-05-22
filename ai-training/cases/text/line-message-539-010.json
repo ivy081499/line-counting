@@ -1,0 +1,18 @@
+{
+  "id": "text-line-message-539-010",
+  "type": "text",
+  "input": "539=04-07-12-17-22=2-3×0.5\n5尾*9尾\n二星*3",
+  "lines": [
+    {
+      "original": "539=04-07-12-17-22=2-3×0.5",
+      "normalized": "0407121722 二x0.5 三x0.5",
+      "confidence": 0.99
+    },
+    {
+      "original": "5尾*9尾 / 二星*3",
+      "normalized": "05152535x09192939 二x3",
+      "confidence": 0.99
+    }
+  ],
+  "warnings": []
+}

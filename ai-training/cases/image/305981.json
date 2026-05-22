@@ -1,0 +1,14 @@
+{
+  "id": "image-305981",
+  "type": "image",
+  "image": {
+    "path": "../../images/305981.jpg",
+    "detail": "high"
+  },
+  "lines": [
+    { "original": "", "normalized": "21x38x1031x2535 二x1 三x2 四x2", "confidence": 0.95 },
+    { "original": "", "normalized": "0708x0327x1125x1434 二x1 三x1 四x1", "confidence": 0.95 },
+    { "original": "", "normalized": "09163621 二x2 三x2 四x2", "confidence": 0.95 }
+  ],
+  "warnings": []
+}

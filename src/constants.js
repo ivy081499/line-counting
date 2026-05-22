@@ -46,22 +46,26 @@ export const PENDING_ACTIONS = {
   DAILY_REPORT_DATE: "daily_report_date",
 };
 
-export const COST_GAME_TYPES = ["539", "大樂透", "港號"];
+export const COST_GAME_TYPES = [
+  "539",
+  // "大樂透",
+  // "港號",
+];
 export const DEFAULT_CAR_GAME_MAX_NUMBER = 39;
 export const GAME_NUMBER_MAX_BY_TYPE = {
   "539": 39,
-  "大樂透": 49,
-  "港號": 49,
+  // "大樂透": 49,
+  // "港號": 49,
 };
 export const DEFAULT_COST_VALUES_BY_GAME = {
   "539": [70, 75, 80, 70],
-  "大樂透": [70, 75, 80, 70],
-  "港號": [70, 75, 80, 70],
+  // "大樂透": [70, 75, 80, 70],
+  // "港號": [70, 75, 80, 70],
 };
 export const DEFAULT_PRIZE_VALUES_BY_GAME = {
   "539": [5300, 57000, 750000],
-  "大樂透": [5300, 57000, 750000],
-  "港號": [5300, 57000, 750000],
+  // "大樂透": [5300, 57000, 750000],
+  // "港號": [5300, 57000, 750000],
 };
 export const DEFAULT_COST_ROWS = COST_GAME_TYPES.map((gameType) =>
   {
